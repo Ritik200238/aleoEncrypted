@@ -1,0 +1,6 @@
+{
+  "program": "user_registry.aleo",
+  "version": "0.1.0",
+  "description": "User registry and profile management for encrypted social network - handles user registration, profile updates, and handle lookups with privacy preservation",
+  "license": "MIT"
+}

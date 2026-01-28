@@ -1,0 +1,6 @@
+{
+  "program": "membership_proof.aleo",
+  "version": "0.1.0",
+  "description": "Zero-knowledge membership verification for encrypted social network - proves group membership without revealing identity",
+  "license": "MIT"
+}

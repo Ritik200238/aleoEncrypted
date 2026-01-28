@@ -1,0 +1,6 @@
+{
+  "program": "message_handler.aleo",
+  "version": "0.1.0",
+  "description": "Encrypted message handling for social network - sends and distributes end-to-end encrypted messages using Aleo records",
+  "license": "MIT"
+}

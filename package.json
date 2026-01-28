@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@provablehq/sdk": "^0.9.15"
+  }
+}

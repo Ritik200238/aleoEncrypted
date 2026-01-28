@@ -1,0 +1,6 @@
+{
+  "program": "group_manager.aleo",
+  "version": "0.1.0",
+  "description": "Group management for encrypted social network - handles private group creation and member additions using zero-knowledge proofs",
+  "license": "MIT"
+}

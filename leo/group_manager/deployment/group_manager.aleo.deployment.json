@@ -1,0 +1,99 @@
+{
+  "type": "deploy",
+  "id": "at1yckaxccdlqrl2cy8tsdrzh49c09j0404ehwat0xhtf336haec58sd3cgyp",
+  "owner": {
+    "address": "aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59",
+    "signature": "sign186zneaz9zckau4svyu5nntpm9eucaeyf5gg0jwxj9wmgkecag5ppfq594lds97gqn9qggnukvqjfpnku5aw8nwpcpxmqcmlfkd4v2qmpr9u8lcug33z284xgv3m4xn80tjvs2yajjmcsz7k4qjwckgvcqqdclgv2s9k3cgqxthnkl8a6mwx3mr2ue4decjaqv364ztuznfgqq599p6g"
+  },
+  "deployment": {
+    "edition": 0,
+    "program": "program group_manager.aleo;\n\nrecord GroupRecord:\n    owner as address.private;\n    group_id as field.private;\n    name as field.private;\n    member_count as u32.private;\n    merkle_root as field.private;\n\nmapping group_merkle_roots:\n    key as field.public;\n    value as field.public;\n\nmapping group_member_counts:\n    key as field.public;\n    value as u32.public;\n\nfunction create_group:\n    input r0 as field.public;\n    input r1 as address.private;\n    hash.bhp256 r0 into r2 as field;\n    cast r1 r2 r0 1u32 r2 into r3 as GroupRecord.record;\n    output r3 as GroupRecord.record;\n\nfunction get_member_count:\n    input r0 as field.public;\n    output 1u32 as u32.private;\n",
+    "verifying_keys": [
+      [
+        "create_group",
+        [
+          "verifier1qygqqqqqqqqqqq9yncqqqqqqqqqv88sqqqqqqqqqk4fqzqqqqqqqp4jvqyqqqqqqqzvl6qqqqqqqqqqvqqqqqqqqqqqz6ghhx43nzeau2nc3ecq9526qmjhg9a6sy398j7j4r6utsfvydmum9e7xcyfh7rqe404m07255esqfvwlge2yza8v04m4dam69df7zcnmadg5cz68dqyrydy9ngqpkx9kgvy6722nxnfwy6trnj786zucpv8sjq502ssndnv7q8308sk8hu5amjnmg893070c5tntuaq8mnvm5q3p2rg56gukaz9h9jr70ryhsp4pvaywuwhm0yd2rurs47snkthyzh4jk22xwpuu8dm8xpzlvrryha0mds3mnn8v8kny6hed8q2pkqr04cvv57wzp4duzwpwd7j5mcfr6vwe3c3py3ulppemjdztu3ynupn2jgmfwv9h8hdrrqtuuu3kzvqpm5dfknnu5sr8eyy2rwhjryse526nysdmprvu7s38tne3k5umzz9m066rk2nkht6lswlhe39dgfgqry5h97lwc4ll8cgj9f4ns2cxr90pyat633mkf26evamhcmljhladflnlwk6r4fxt9jx3uu42rz5qqwhc29hy4s9dd4hrwjaznh8ngzp3c7dnhywhh4q6hvr8gdqezu5p68jtv2kl8xj9ctr0cf37j2cqqzu776fcq0trtdld4j927lug352nethp66h66la5ctmjxxkpnmgcdvz0tvdceh59wkz0hmuevwz0qqy4uw2n5ct444zwzy8l08pwd6mqs7zmzq9tr26lnv8x8z2zpqfynkec4806kaygfq56v6fdzamz2xqk4lryppy98j0hdcvg25cfp5hufyu8xrxpxy89pm3sscm7gkl99zxaagr34s0e5jkj3h6csjweyccpa0vv2qgc3tz77k44u7r5pp9huqecp2ywm89q8xtn64m59yudkzwgcfzkcma20mq3xf23989ap8ucqq6l4nqdjmarps4va56sm5n2datp7lhlkwv77gasp0amg48c0ghlvnzsqqqqqqqqqa4c0c0",
+          "certificate1qyqsqqqqqqqqqq8sj2fcxxsdyxmhqwh0ueuhl0uaa6awcfg9z83tdv7f6q7qq20jxd65c65jnwpa0d0xkjcsf20mdsqqqf786rz"
+        ]
+      ],
+      [
+        "get_member_count",
+        [
+          "verifier1qygqqqqqqqqqqqpr9uqqqqqqqqqpvtcqqqqqqqqqtekqqqqqqqqqpk55qqqqqqqqqzer7qqqqqqqqqqvqqqqqqqqqqqpk2cew2w5qkgphjj98gkdeym4ej8s8svqnjafjus65uxv9me8zwx8zh8klnhz0m7v0u2g94rdgm5puwncnrqkx7ts8el96q02msv0zqkkgpfm2u9dt3aas8e38v072h0va96ypl9fxyv2vg03yzvnfxegqjpg7sfgd5vvs2k850k2hppef3jmgcx9h92jselcxgkfj0gla3rk4lqlhfrdqzy3r8x9avelk8p5q9s4t7z5y0qhwfrl7j34yap3mc56vtty0n9xvkltuhp3eqy7peeetlvnjqenvfkas4ykakyzeceftqwg9dw0v2kwx8kr5dunjhr8fwsetnd28ytyprc6060hdsuthgu22uftspe09t2xulg8vqqw4r0v8vqgaagyjp94f9rhrmhn8r2nz72fral7lulc3su5yhytyvnl6klp5ctqf40kmu4n88xvj6h7w08syzsp8jmmfjz9rqy0rtnycce3tjcu26j6w4q979t7f2auz7yc4vh76kpjhgsf4fs7ca3yxu9qpj397zpcrudqwef2gwtxyk86f3h2jyeukvqq2agw6sf504kfy3w30dlf0xfehp2lxx2ls53d8958tjd8qxdzszxeatxtx0esxt9dg9y2f077jn25x3ke3mw843z87cgryzqucwcjd753r8rktvwlwmaz6py9rhwvfq839jhz73e3s9krpuqvw97xtxfp64jhph7lhcmqh45y2zhm3d3wva09jdpk5drfpgehmhulcjc46sqfwdlkyyw4ru08kyca05xkfqu7h2ldwr4deqfgf4es80j3ellun53086re5h2huqny489rjhn5tz5qvzv2gw6dq48vh4nhg0pwkwyuffv58w03g9dcgdruqklfac8mywffspx8n30wm3wj7sjltn2x7wfqqjvy054xhreuw0c8eppy9mqtec92ya50e5vwx3e23kcvpd5vfnput4qsqqqqqqqqqhndhl5",
+          "certificate1qyqsqqqqqqqqqqr3ftt752hgkxm6y7m22frftee8f99uj9vc4gzwjacfncj2qm8uqt8w5trgcnkywsnxplts5cxgd6qsqrylw0t"
+        ]
+      ]
+    ],
+    "program_checksum": [
+      "143u8",
+      "235u8",
+      "77u8",
+      "150u8",
+      "67u8",
+      "211u8",
+      "72u8",
+      "171u8",
+      "199u8",
+      "119u8",
+      "94u8",
+      "132u8",
+      "80u8",
+      "58u8",
+      "127u8",
+      "56u8",
+      "171u8",
+      "241u8",
+      "116u8",
+      "205u8",
+      "42u8",
+      "12u8",
+      "144u8",
+      "95u8",
+      "21u8",
+      "13u8",
+      "124u8",
+      "251u8",
+      "241u8",
+      "91u8",
+      "37u8",
+      "145u8"
+    ],
+    "program_owner": "aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59"
+  },
+  "fee": {
+    "transition": {
+      "id": "au1aphj37z0y78949hvnmuny7fpzvqy0k9m4tnxgfsqy6yrw56j8y9qxg0nkz",
+      "program": "credits.aleo",
+      "function": "fee_public",
+      "inputs": [
+        {
+          "type": "public",
+          "id": "3373247200316381954165755597007007260723778846725324946387721301311500089850field",
+          "value": "2956962u64"
+        },
+        {
+          "type": "public",
+          "id": "2902099513985904262395435819029223500508929380641671545485863741926560086568field",
+          "value": "0u64"
+        },
+        {
+          "type": "public",
+          "id": "4501040295435399948939299596404830837685569472632337219611473225096393955703field",
+          "value": "6510622357351355926164188606573076219616218486082574627811266091773259501206field"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "future",
+          "id": "6989121514805721168936920107477951116752513148129900527408032894842965171547field",
+          "value": "{\n  program_id: credits.aleo,\n  function_name: fee_public,\n  arguments: [\n    aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59,\n    2956962u64\n  ]\n}"
+        }
+      ],
+      "tpk": "76607604157294015064560945397629569592188765248185669202449236454699383359group",
+      "tcm": "4335710143752802813019684004182944477341525607597250296031934815311995643455field",
+      "scm": "148798559363343786311177276027632710880673635545855355203282375609775415126field"
+    },
+    "global_state_root": "sr18fnvz0nkvsujkqu6fk6v5pppap0tvwxr8n582y7m235e6z7zsyrsew5e67",
+    "proof": "proof1qyqsqqqqqqqqqqqpqqqqqqqqqqqycsp9cva695r7zzsgzddcqzs5xt9qrtq73dk6d7rq3dct56895fyah7l8m7ycxen7m30wd94h8p5qq8tg05v0la8ycj8r7tcqpham24z7qjx8j02tvrkmpf0adarvj82nc8lz4qv5xavq7enaj4yclf9j0q9uj3wtt87ttagj4uylk9lrramftyswnv7gutjqmwuq9zvj9pm85d852cxcj7xx5e9s05ya49k0lvqqmxhpw7gtyr0yer9gg5qkv4hewk450svtv6y7cl0hxawxfja4jy08uy2jw6xday5dskqf6mkzgquq7tuagwamah29sgerxejlpe9y6hff8ea6wp4jre38ay43s7nrge0a52pkg5ysmswq5nfxh4srjccgqlffcuy69pjlk83qj4c8nc8huen0cqntzwlu2ypr082gx55emk3k95r0f93fksrvy20t8gxhy0r9qzne79gc7zq0m6a65m88zdvmlmg9jvx5nls50ma55p4rqrvdnxpzm6ef7035jjgcwfpm0glw9hrh0qp5tlzgnuedqpgsxjs0julp43suqlhmrmf0jsd6ktljek596aprh8jzxlukngmrdqc2q8ctmch84yqgyvjmhfg2xqvr026dukt8hc8yv9wwgvwvn84nu2ef520fkdrgnddv5uu6mz00h9erx4evz4j3cdcqxmvh3tnnam2px0knszkugxm4nt6w7ks4gqhy6p2cg8mxa53umu90m9aklh8nyu65ntsrke2gex3pz6jc6zdgtrzcnyvpjdgqnxvhxz9cxvwga77mpd8c9v3u42chsy7qcfm4h9n7wznm8z2y608jkvf4qa99p49jasm300wkylvgs0yq7x7p3f383ndvg3x2rdpda7phqgyqjnmyus80mrnj59u4r8hkyny922vr6ypqvgxwx8u7v6m8xlcm74gq7ysarxhc50l5w2hek5zuejn5m2yy9m4s4ruy3fq93gu4q9fptug69rtadhtswqq438fhjy8d8rvw4275zwa5d5qwfpu0kudxeqruvrafcjhemgtxc5anmrefyxe4h4zta2wmnv2a4h3ps6cax48j85mjqr8np5q4pn7h9cym24gh96va4ra8nw577uahct3w7h0067cn8l2qvvzzk9kwdlr2063y6lfxjcskxlgp2j880twfqwl0es4c9mynr4grqvqqqqqqqqqqpyf5pcu4hm829wyd20j7su4wdslycteytnuqpg6smw6px87g0t0la8z620595nxeayktttmwnce0syqgv72zswv335arlj708tc4yae8knnd304yhjzr26ud3ar9y3c44lek249uxp30lkzwyjff63p2m3qqq9e6nfn05a9z9h7x0vmtstgt60wvul4gx4sp5kanwuctgay90smsgxw5p43nf2fuhuzyywklyy8akxssgjrk076f7tadpqyp02jhlwyl76l2mn2upas4w9d4wtptu7uvqqqq63xjls"
+  }
+}

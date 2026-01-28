@@ -1,0 +1,6 @@
+{
+  "program": "group_membership.aleo",
+  "version": "0.0.0",
+  "description": "Anonymous group membership verification using zero-knowledge proofs",
+  "license": "MIT"
+}
