@@ -1,5 +1,5 @@
 /**
- * Clean Telegram App - Fixed Layout (No Overlapping!)
+ * Main messaging interface
  */
 
 import { useState, useEffect } from 'react';
