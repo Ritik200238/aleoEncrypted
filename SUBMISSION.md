@@ -12,8 +12,8 @@
 The first private social network on Aleo — E2E encrypted messaging with ZK-native private payments, all verifiable on-chain.
 
 ### Live Demo
-🌐 **[Live App — deploying to Vercel]**
-> Demo mode (no wallet needed): append `?demo=true` to the URL
+🌐 **[Live App — EncryptedSocial](https://frontend-lyart-three-71.vercel.app)**
+> Demo mode (no wallet needed): [frontend-lyart-three-71.vercel.app/?demo=true](https://frontend-lyart-three-71.vercel.app/?demo=true)
 
 ### GitHub
 🔗 https://github.com/Ritik200238/aleoEncrypted

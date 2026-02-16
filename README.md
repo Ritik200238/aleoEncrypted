@@ -9,8 +9,8 @@
 
 ## Live Demo
 
-🌐 **[EncryptedSocial — Live on Vercel]** ← updating after Vercel deploy
-📱 Demo mode (no wallet): add `?demo=true` to URL
+🌐 **[EncryptedSocial — Live App](https://frontend-lyart-three-71.vercel.app)**
+📱 Demo mode (no wallet): [frontend-lyart-three-71.vercel.app/?demo=true](https://frontend-lyart-three-71.vercel.app/?demo=true)
 
 ## What It Does
 
