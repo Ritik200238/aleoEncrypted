@@ -1,43 +1,27 @@
 /**
- * WalletProvider Component (Wave 2) - PRODUCTION VERSION
- * Provides Aleo wallet context to the entire app
- *
- * Uses @demox-labs/aleo-wallet-adapter-react for wallet management
+ * WalletProvider Component - Shield Wallet Integration
+ * Provides Aleo wallet context using Shield Wallet (buildathon requirement)
  */
 
 import { ReactNode, useMemo } from 'react';
-import { WalletProvider as AleoWalletProvider } from '@demox-labs/aleo-wallet-adapter-react';
-import { WalletModalProvider } from '@demox-labs/aleo-wallet-adapter-reactui';
-import { WalletAdapterNetwork } from '@demox-labs/aleo-wallet-adapter-base';
-import { LeoWalletAdapter } from '@demox-labs/aleo-wallet-adapter-leo';
-import '@demox-labs/aleo-wallet-adapter-reactui/styles.css';
+import { AleoWalletProvider } from '@provablehq/aleo-wallet-adaptor-react';
+import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adaptor-shield';
+import { Network } from '@provablehq/aleo-types';
 
 interface WalletProviderProps {
   children: ReactNode;
 }
 
 export function WalletProvider({ children }: WalletProviderProps) {
-  // Configure wallet network (testnet by default)
-  const network = WalletAdapterNetwork.TestnetBeta;
-
-  // Configure wallet adapters
-  const wallets = useMemo(
-    () => [
-      new LeoWalletAdapter({
-        appName: 'EncryptedSocial',
-      }),
-    ],
-    []
-  );
+  const wallets = useMemo(() => [new ShieldWalletAdapter()], []);
 
   return (
     <AleoWalletProvider
       wallets={wallets}
-      network={network}
-      decryptPermission="UponRequest"
+      network={Network.TESTNET}
       autoConnect={false}
     >
-      <WalletModalProvider>{children}</WalletModalProvider>
+      {children}
     </AleoWalletProvider>
   );
 }

@@ -1,14 +1,38 @@
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { WalletMultiButton } from '@demox-labs/aleo-wallet-adapter-reactui';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { Network } from '@provablehq/aleo-types';
 import { CleanTelegramApp } from './components/CleanTelegramApp';
 import { MessageSquare, Shield, Zap } from 'lucide-react';
 import './App.css';
 
 function App() {
-  const { connected, publicKey } = useWallet();
+  const { connected, address, connect, connecting } = useWallet();
 
-  // Get user address from wallet
-  const userAddress = publicKey?.toString() || 'aleo1anonymous';
+  // Demo mode: ?demo=true bypasses wallet for testing/judging
+  const isDemo = new URLSearchParams(window.location.search).get('demo') === 'true';
+  const userAddress = address || 'aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59';
+
+  if (isDemo) {
+    return (
+      <div className="flex flex-col h-screen">
+        {/* Judge demo banner */}
+        <div className="flex items-center justify-between px-4 py-2 text-xs font-mono shrink-0"
+          style={{ background: 'linear-gradient(90deg, #1e1b4b, #312e81)', color: '#a5b4fc' }}>
+          <span>🔬 DEMO MODE — Aleo Testnet | Deployed contracts: group_manager · membership_proof · message_handler</span>
+          <div className="flex gap-4">
+            <a href="https://explorer.aleo.org/transaction/at12gkmegshtlsjgzfpng4ls8mprlwc0s5l9573wy9khlqcelf97cqs36kwew?network=testnet"
+              target="_blank" rel="noopener noreferrer"
+              className="underline hover:text-white transition-colors">group_manager TX</a>
+            <a href="https://explorer.aleo.org/transaction/at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q?network=testnet"
+              target="_blank" rel="noopener noreferrer"
+              className="underline hover:text-white transition-colors">message_handler TX</a>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0">
+          <CleanTelegramApp userAddress={userAddress} />
+        </div>
+      </div>
+    );
+  }
 
   if (!connected) {
     return (
@@ -31,24 +55,37 @@ function App() {
               <p className="text-xl text-slate-300 max-w-lg mx-auto leading-relaxed">
                 Private messaging powered by{' '}
                 <span className="text-blue-400 font-semibold">Aleo blockchain</span>
-                {' '}with zero-knowledge proofs
+                {' '}— E2E encrypted messages + ZK private payments
               </p>
             </div>
 
             {/* Connect Button */}
             <div className="flex flex-col items-center gap-4 pt-6">
-              <WalletMultiButton className="!bg-gradient-to-r !from-blue-500 !to-purple-600 !px-8 !py-4 !text-lg !font-semibold !rounded-xl !shadow-lg hover:!shadow-blue-500/50 !transition-all hover:!scale-105" />
+              <button
+                onClick={() => connect(Network.TESTNET)}
+                disabled={connecting}
+                className="bg-gradient-to-r from-blue-500 to-purple-600 px-8 py-4 text-lg font-semibold rounded-xl shadow-lg hover:shadow-blue-500/50 transition-all hover:scale-105 text-white disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {connecting ? 'Connecting...' : 'Connect Shield Wallet'}
+              </button>
               <p className="text-sm text-slate-400">
-                Connect your Aleo wallet to start messaging
+                Connect your Shield Wallet to start messaging privately
               </p>
+              {/* Demo mode button for judges */}
+              <button
+                onClick={() => { const url = new URL(window.location.href); url.searchParams.set('demo', 'true'); window.location.href = url.toString(); }}
+                className="mt-2 text-sm text-blue-400 underline underline-offset-2 hover:text-blue-300 transition-colors"
+              >
+                👁️ Try Demo Mode (no wallet needed)
+              </button>
             </div>
 
             {/* Features Grid */}
             <div className="grid grid-cols-3 gap-4 pt-12 max-w-3xl mx-auto">
               {[
-                { icon: Shield, label: 'Private', desc: 'End-to-end encrypted' },
-                { icon: MessageSquare, label: 'Decentralized', desc: 'No central server' },
-                { icon: Zap, label: 'Fast', desc: 'Real-time messaging' }
+                { icon: Shield, label: 'E2E Encrypted', desc: 'AES-256-GCM messages' },
+                { icon: Zap, label: 'ZK Payments', desc: 'credits.aleo transfer_private' },
+                { icon: MessageSquare, label: 'On-Chain', desc: 'Verified on Aleo Testnet' }
               ].map((feature, i) => (
                 <div
                   key={i}

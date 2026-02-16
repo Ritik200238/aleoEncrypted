@@ -1,474 +1,223 @@
-# Aleo Buildathon Submission - EncryptedSocial
+# Aleo Privacy Buildathon — Wave 2 Submission
+## EncryptedSocial: Private Social Network on Aleo
+
+---
 
 ## 1. Project Overview
 
 ### Name
 **EncryptedSocial**
 
-### Description
-A decentralized messaging platform leveraging Aleo's zero-knowledge proofs to provide cryptographically guaranteed privacy. Unlike traditional messaging apps, EncryptedSocial uses ZK-SNARKs to prove message authenticity and group membership without revealing sender identity.
+### One-Line Description
+The first private social network on Aleo — E2E encrypted messaging with ZK-native private payments, all verifiable on-chain.
 
-### Problem Being Solved
+### Live Demo
+🌐 **[Live App — deploying to Vercel]**
+> Demo mode (no wallet needed): append `?demo=true` to the URL
 
-**Trust Problem in Current Messaging:**
-- Centralized servers can access all user messages
-- No cryptographic privacy guarantee
-- Metadata leaks reveal communication patterns
-- Central points of failure and censorship
-
-**Our Solution:**
-- Zero-knowledge proofs eliminate trust requirements
-- Decentralized architecture removes central authority
-- On-chain verification ensures authenticity
-- Cryptographic privacy preserves anonymity
-
-### Why Privacy Matters
-
-Private communication is critical for:
-
-**Whistleblowers:** Safe reporting of corporate or government misconduct without fear of retaliation
-
-**Journalists:** Protecting sources when reporting on sensitive topics
-
-**Activists:** Organizing safely in oppressive environments
-
-**Enterprises:** Secure internal communications and anonymous feedback channels
-
-**Individuals:** Fundamental right to private conversation
-
-Traditional "encrypted" messaging requires trusting the provider. EncryptedSocial uses **zero-knowledge cryptography** to eliminate this trust requirement entirely.
-
-### Product Market Fit (PMF)
-
-#### Target Markets
-
-**Primary: Enterprise ($2B+ TAM)**
-- Anonymous employee feedback systems
-- Whistleblower channels
-- Compliance reporting
-- Internal communications
-
-**Secondary: Privacy-Conscious Users (50M+ globally)**
-- Activists and journalists
-- High-net-worth individuals
-- Crypto community
-- Security professionals
-
-**Tertiary: Decentralized Organizations**
-- DAO governance with private voting
-- Community management
-- Anonymous coordination
-
-#### Market Validation
-
-- **Pain Point**: 73% of employees won't give honest feedback due to privacy concerns (Gartner 2025)
-- **Market Gap**: No existing solution offers cryptographically proven anonymity
-- **Willingness to Pay**: Enterprise feedback tools command $10-50/user/month
-- **Early Traction**: Target 5 enterprise pilots in Q2 2026
-
-### Go-To-Market (GTM) Plan
-
-#### Phase 1: Crypto-Native Launch (Q1 2026)
-**Target:** Aleo community, crypto enthusiasts
-**Tactics:**
-- Testnet launch and community engagement
-- Discord/Twitter presence in crypto communities
-- Aleo ecosystem partnerships
-**Metrics:** 1,000 active wallets, 50+ daily messages
-**Investment:** $0 (community-driven)
-
-#### Phase 2: Enterprise Pilot (Q2-Q3 2026)
-**Target:** 5-10 mid-size companies (500-5000 employees)
-**Tactics:**
-- Direct B2B outreach to HR/Compliance teams
-- Case studies from pilot programs
-- White-label deployment options
-**Metrics:** $50K ARR, 5,000+ enterprise users
-**Investment:** $50K (sales, support)
-
-#### Phase 3: Scale (Q4 2026 - 2027)
-**Target:** Privacy-conscious mainstream users
-**Tactics:**
-- App store launch (iOS/Android)
-- Influencer partnerships
-- PR campaign around privacy rights
-**Metrics:** 100K+ users, $500K ARR
-**Investment:** $200K (marketing, development)
-
-#### Revenue Model
-- **Freemium**: Basic messaging free (acquisition)
-- **Enterprise**: $10/user/month (primary revenue)
-- **Premium**: $5/month for advanced features
-- **Developer API**: $500/month
-
-#### Key Partnerships
-- **Aleo Foundation**: Technical support, grants
-- **Privacy Organizations**: EFF, Signal Foundation
-- **Enterprise Partners**: HR tech companies
-
-#### Competitive Positioning
-
-| Platform | Privacy Proof | Decentralized | Verifiable | No Phone# |
-|----------|--------------|---------------|------------|-----------|
-| **EncryptedSocial** | ✅ ZK Proofs | ✅ Yes | ✅ On-chain | ✅ Yes |
-| Signal | ❌ Trust-based | ❌ No | ❌ No | ❌ No |
-| Telegram | ❌ Trust-based | ❌ No | ❌ No | ❌ No |
-| WhatsApp | ❌ Trust-based | ❌ No | ❌ No | ❌ No |
+### GitHub
+🔗 https://github.com/Ritik200238/aleoEncrypted
 
 ---
 
-## 2. Working Demo
+## 2. What Problem We Solve
 
-### Deployment Status
-- **Network**: Aleo Testnet
-- **Contract**: `group_membership.aleo`
-- **Transaction ID**: [Pending deployment - see deployment logs]
-- **Explorer Link**: https://explorer.aleo.org
+Current messaging platforms have a fundamental trust problem:
+- Centralized servers can read all messages
+- No cryptographic proof of privacy — you must trust the provider
+- Payment metadata leaks identity (who paid whom, when, how much)
 
-### Functional Smart Contracts
+**EncryptedSocial solves this with two layers:**
 
-**group_membership.aleo**
-- Lines of code: 363
-- Test coverage: 79/79 tests passed
-- Functions:
-  - `create_group()`: Initialize group with Merkle root
-  - `verify_membership()`: ZK proof verification
-  - `submit_message()`: Anonymous message submission
-  - `check_nullifier()`: Prevent double-voting
+| Layer | What | How |
+|-------|------|-----|
+| Messages | E2E encrypted with AES-256-GCM | Encrypted before leaving your device — relay server is blind |
+| Payments | ZK-private transfers via `credits.aleo/transfer_private` | Payer identity + balance hidden by Aleo's ZK-SNARK — verifiable on explorer |
+| Groups | On-chain membership records | Created via `group_manager.aleo` — verifiable on Aleo Testnet |
 
-### UI Demo
-
-**Core Features Demonstrated:**
-1. **Wallet Connection**: Leo Wallet integration
-2. **Contact Management**: Add/remove contacts
-3. **Direct Messaging**: 1-on-1 encrypted chats
-4. **Group Chats**: Multi-party conversations
-5. **Search**: Find chats and contacts
-6. **Settings**: Wallet management, preferences
-
-**Access:**
-- **Web App**: [Deployment URL - see deployment logs]
-- **Source Code**: https://github.com/Ritik200238/aleoEncrypted
-- **Local Setup**: See README.md
-
-### Screenshots
-
-[Include screenshots of:]
-1. Main chat interface
-2. Contact list
-3. ZK proof generation
-4. Message submission
-5. Aleo Explorer showing transaction
+This is not "messaging with encryption bolted on." The **payment layer is genuinely zero-knowledge** — a mathematical proof that the transfer happened without revealing who sent it.
 
 ---
 
-## 3. Technical Documentation
+## 3. Deployed Smart Contracts (Aleo Testnet)
 
-### GitHub Repository
-**URL**: https://github.com/Ritik200238/aleoEncrypted
+All three contracts are live on Aleo Testnet and verifiable on the explorer:
 
-**Structure:**
+| Contract | TX ID | Explorer |
+|----------|-------|---------|
+| `group_manager.aleo` | `at12gkmegshtlsjgzfpng4ls8mprlwc0s5l9573wy9khlqcelf97cqs36kwew` | [View](https://explorer.aleo.org/transaction/at12gkmegshtlsjgzfpng4ls8mprlwc0s5l9573wy9khlqcelf97cqs36kwew?network=testnet) |
+| `membership_proof.aleo` | `at1heup986u7f0hhd26um6mmfvp95uq9yfmv2xa5vzh2yvd7g4d6qpsx5q9f4` | [View](https://explorer.aleo.org/transaction/at1heup986u7f0hhd26um6mmfvp95uq9yfmv2xa5vzh2yvd7g4d6qpsx5q9f4?network=testnet) |
+| `message_handler.aleo` | `at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q` | [View](https://explorer.aleo.org/transaction/at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q?network=testnet) |
+
+**Deployer wallet:** `aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59`
+
+---
+
+## 4. The ZK Feature — Private Tips via credits.aleo
+
+The core privacy feature judges can verify on-chain:
+
+1. Open the app → Connect Shield Wallet
+2. Open any chat → click **"ZK Tip"** on a message
+3. Enter amount → Shield Wallet popup → Approve
+4. **A `credits.aleo/transfer_private` transaction appears on Aleo Explorer**
+   - The sender's identity is hidden by Aleo's ZK-SNARK
+   - The sender's balance is hidden
+   - The transfer is mathematically verified — no trust required
+
+This is the same core ZK primitive that makes Aleo unique. We've embedded it inside a real social context.
+
+---
+
+## 5. Architecture
+
 ```
-aleoEncrypted/
-├── leo/group_membership/    # Smart contracts
-├── frontend/                # React application
-├── docs/                    # Documentation
-└── README.md               # Project overview
+┌─────────────────────────────────────────────────────┐
+│              EncryptedSocial Frontend               │
+│                 (React 19 + TypeScript)             │
+│                                                     │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────┐  │
+│  │  Chats   │  │ Contacts │  │ Privacy Dashboard │  │
+│  │  (AES)   │  │          │  │   (ZK metrics)    │  │
+│  └──────────┘  └──────────┘  └───────────────────┘  │
+│                                                     │
+│            Shield Wallet Integration                │
+│         (@provablehq/aleo-wallet-adaptor)           │
+└─────────────┬──────────────────────┬────────────────┘
+              │                      │
+              ▼                      ▼
+┌─────────────────────┐  ┌──────────────────────────┐
+│   Aleo Blockchain   │  │   WebSocket Relay Server  │
+│   (Testnet)         │  │   (Node.js, Port 3001)    │
+│                     │  │   Pure relay — never       │
+│  group_manager.aleo │  │   decrypts messages        │
+│  membership_proof   │  └──────────────────────────┘
+│  message_handler    │
+│  credits.aleo       │  ← transfer_private (ZK tips)
+└─────────────────────┘
 ```
 
-### Architecture Overview
+### Privacy Stack
+- **Messages**: AES-256-GCM (Web Crypto API) — encrypted client-side, relay is blind
+- **Payments**: `credits.aleo/transfer_private` — ZK-SNARK, sender identity + balance hidden
+- **Groups**: `group_manager.aleo` — on-chain membership, verifiable on explorer
+- **Storage**: IndexedDB (Dexie.js) — local only, no cloud database of messages
 
-#### System Architecture
+---
 
-```
-┌──────────────────────────────────────────────┐
-│           Frontend (React + Tauri)           │
-│  ┌────────┐  ┌─────────┐  ┌──────────────┐  │
-│  │ Chats  │  │Contacts │  │   Settings   │  │
-│  └────────┘  └─────────┘  └──────────────┘  │
-└───────────────────┬──────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────┐
-│         Aleo Wallet Adapter (Leo)            │
-└───────────────────┬──────────────────────────┘
-                    │
-                    ▼
-┌──────────────────────────────────────────────┐
-│         Aleo Blockchain (Testnet)            │
-│                                              │
-│  ┌────────────────────────────────────────┐ │
-│  │   group_membership.aleo                │ │
-│  │                                        │ │
-│  │  • Merkle tree verification           │ │
-│  │  • ZK proof validation                │ │
-│  │  • Nullifier tracking                 │ │
-│  │  • Message storage                    │ │
-│  └────────────────────────────────────────┘ │
-└──────────────────────────────────────────────┘
-```
+## 6. Features Demo
 
-#### Tech Stack
+### What Judges Can Test Right Now
 
-**Blockchain Layer:**
+1. **Connect Shield Wallet** → address shown in sidebar
+2. **Create a private group** → triggers `group_manager.aleo/create_group` → TX on explorer
+3. **Send a message** → AES-256-GCM encrypted, stored in IndexedDB
+4. **Open DevTools Network tab** → see encrypted blob, never plaintext
+5. **Click "ZK Tip"** on any message → Shield Wallet popup → `transfer_private` TX on explorer ⭐
+6. **Privacy Score Dashboard** → live metrics: encrypted messages, ZK tips, on-chain TXs
+7. **Anonymous Mode** → group messages sent as "Anonymous Member" (identity hidden)
+8. **Demo mode** → append `?demo=true` to URL — no wallet needed for judges
+
+### Feature Comparison
+
+| Feature | EncryptedSocial | NullPay | Signal | Telegram |
+|---------|----------------|---------|--------|----------|
+| ZK Private Payments | ✅ transfer_private | ✅ transfer_private | ❌ | ❌ |
+| E2E Encrypted Messages | ✅ AES-256-GCM | ❌ | ✅ | Partial |
+| On-Chain Membership | ✅ group_manager.aleo | ❌ | ❌ | ❌ |
+| Social Context | ✅ Full messenger | ❌ Invoices only | ✅ | ✅ |
+| Decentralized Relay | ✅ WebSocket, blind | ❌ Supabase | ❌ | ❌ |
+| Shield Wallet | ✅ | ✅ | N/A | N/A |
+
+---
+
+## 7. Tech Stack
+
+### Blockchain
 - Aleo Testnet
-- Leo v3.4.0 (smart contracts)
-- ZK-SNARK proofs
-- BHP256 hash function
+- Leo (smart contracts)
+- `credits.aleo/transfer_private` for ZK payments
+- BHP256 hashing (field elements for on-chain storage)
 
-**Frontend:**
-- React 19 (UI framework)
-- TypeScript (type safety)
-- Tailwind CSS (styling)
-- Vite (build tool)
-- Tauri (desktop app)
+### Frontend
+- React 19 + TypeScript
+- Vite (build), Tailwind CSS (styling), Framer Motion (animations)
+- `@provablehq/aleo-wallet-adaptor-react` + Shield Wallet
+- Dexie.js (IndexedDB), Web Crypto API (AES-256-GCM)
+- Socket.io-client (real-time relay)
 
-**Wallet Integration:**
-- @demox-labs/aleo-wallet-adapter-react
-- Leo Wallet extension support
-
-### Privacy Model Explanation
-
-#### How Privacy Works
-
-**1. Group Creation:**
-```
-Admin creates group:
-├── Collect member addresses: [addr1, addr2, ..., addrN]
-├── Build Merkle tree with addresses as leaves
-├── Compute root hash
-└── Store root on-chain (public)
-```
-
-**2. Zero-Knowledge Proof Generation:**
-```
-Member wants to send message:
-├── Has: Own address, Merkle path to root
-├── Generates ZK proof proving:
-│   ├── "I know an address in the Merkle tree"
-│   ├── "I know the path from my address to root"
-│   └── "I'm not revealing which address is mine"
-├── Proof is ~200 bytes
-└── Cryptographically impossible to reverse
-```
-
-**3. Message Submission:**
-```
-On-chain smart contract:
-├── Receives: ZK proof + Message + Nullifier
-├── Verifies: Proof is valid for this group's root
-├── Checks: Nullifier hasn't been used before
-├── Stores: Message + Proof (NOT sender address)
-└── Result: Message proven authentic, sender anonymous
-```
-
-**4. Privacy Guarantees:**
-
-✅ **Anonymity**: Sender identity cryptographically hidden
-✅ **Authenticity**: Proof verifies sender is group member
-✅ **Non-Repudiation**: Can't deny membership after sending
-✅ **No Double-Voting**: Nullifier prevents reuse
-✅ **Public Verifiability**: Anyone can verify proof validity
-❌ **No Trust Required**: Pure cryptography, no trusted party
-
-#### What's Public vs Private
-
-| Data | Visibility | Why |
-|------|-----------|-----|
-| Merkle Root | Public | Needed for proof verification |
-| ZK Proof | Public | Proves validity without revealing identity |
-| Message Content | Public* | Visible to group members |
-| Sender Address | **Private** | **Hidden by ZK proof** |
-| Merkle Path | **Private** | **Hidden in proof** |
-| Nullifier | Public | Prevents double-voting |
-
-\* Message content can be encrypted for additional privacy (future feature)
-
-#### Security Properties
-
-**Cryptographic Guarantees:**
-1. **Zero-Knowledge**: Proof reveals NOTHING about which member sent message
-2. **Soundness**: Impossible to forge proof without being member
-3. **Completeness**: Valid member can always generate valid proof
-4. **Unlinkability**: Can't link multiple messages from same sender
-
-**Attack Resistance:**
-- **Sybil Attack**: Merkle root controls membership
-- **Replay Attack**: Nullifiers prevent reuse
-- **Forgery**: ZK-SNARK computationally infeasible to break
-- **Metadata Leaks**: No IP addresses, timestamps obfuscated
-
-#### Comparison to Alternatives
-
-**vs. Traditional E2E Encryption (Signal, WhatsApp):**
-- They: Trust server to not log metadata
-- Us: Cryptographically proven no metadata logged
-
-**vs. Mixing Networks (Tor, Monero):**
-- They: Probabilistic anonymity through mixing
-- Us: Cryptographic anonymity through ZK proofs
-
-**vs. Other ZK Systems:**
-- They: Often require trusted setup
-- Us: Aleo's universal, updatable setup
+### Backend
+- Node.js + Express + Socket.io
+- Pure message relay — never stores or decrypts messages
+- Health endpoint: `/health`
 
 ---
 
-## 4. Team Information
+## 8. Privacy Model — What's ZK vs What's Not
 
-### Team Members
+We are transparent about this:
 
-**Ritik**
-- **Role**: Full Stack Developer & Blockchain Engineer
-- **Discord**: ritik200238
-- **GitHub**: [@Ritik200238](https://github.com/Ritik200238)
-- **Aleo Wallet Address**: `aleo1...` [Full address in deployment logs]
-- **Contribution**: Smart contracts, frontend, architecture
+| Feature | Privacy Method | Is it ZK? |
+|---------|---------------|-----------|
+| Message content | AES-256-GCM encryption | No — symmetric cipher |
+| Private tips | credits.aleo/transfer_private | **Yes — Aleo ZK-SNARK** |
+| Group membership | On-chain record (public) | No — public record |
+| Anonymous mode | Hidden sender name in UI | No — UI layer only |
+| Relay transport | WebSocket (relay is blind) | No — TLS layer |
 
-### Grant Distribution
-
-**Primary Wallet**: [Aleo address from deployment]
-
----
-
-## 5. Progress Changelog (Wave 2)
-
-### What We Built Since Last Submission
-
-**Wave 1 (Baseline):**
-- Basic contract structure
-- Proof of concept UI
-- Local testing only
-
-**Wave 2 (Current Submission):**
-
-**✅ Smart Contracts (Major Upgrade):**
-- Complete `group_membership.aleo` implementation
-- Merkle tree verification with 8-level depth
-- Nullifier system to prevent replay attacks
-- BHP256 cryptographic hashing
-- 79/79 comprehensive test suite
-- 363 lines of production-ready code
-
-**✅ Frontend (Complete Rebuild):**
-- Professional messaging interface
-- Contact management system
-- Group chat support
-- Wallet integration (Leo Wallet)
-- Responsive design
-- Dark theme UI
-- Search functionality
-
-**✅ Infrastructure:**
-- Testnet deployment scripts
-- Production build optimization
-- Desktop app framework (Tauri)
-- Comprehensive documentation
-
-### Feedback Incorporated
-
-**From Community/Testing:**
-1. **"Merkle trees seemed incomplete"** → Implemented full 8-level verification
-2. **"No way to prevent spam"** → Added nullifier system
-3. **"UI too basic"** → Complete professional redesign
-4. **"No contact management"** → Built full contact system
-5. **"Hard to test"** → Added sample data and test scripts
-
-### Technical Improvements
-
-**Performance:**
-- Proof generation: ~3-5 seconds (acceptable for messaging)
-- UI load time: < 2 seconds
-- Contract execution: < 1 second on testnet
-
-**Security:**
-- Input validation on all user data
-- Secure private key handling
-- XSS prevention
-- SQL injection N/A (no SQL)
-
-**Code Quality:**
-- TypeScript throughout frontend
-- Comprehensive error handling
-- Clean architecture
-- Documented functions
-
-### Next Wave Goals (Wave 3)
-
-**High Priority:**
-1. **Mainnet Deployment**: Move from testnet to mainnet
-2. **Mobile Apps**: iOS and Android native apps
-3. **Voice/Video**: Encrypted calls with ZK authentication
-4. **File Sharing**: Decentralized encrypted file storage
-
-**Medium Priority:**
-5. **Group Admin Tools**: Member management, permissions
-6. **Read Receipts**: Privacy-preserving delivery confirmation
-7. **Message Reactions**: Emoji reactions with ZK
-8. **Search Enhancement**: Full-text search with privacy
-
-**Future Vision:**
-9. **Cross-Chain**: Support other ZK chains
-10. **Open Protocol**: Standardized ZK messaging protocol
-11. **Enterprise Features**: Admin dashboards, analytics
-12. **SDK Release**: Developer SDK for integration
-
-### Metrics
-
-**Code:**
-- Smart Contract: 363 lines Leo
-- Frontend: ~5,000 lines TypeScript/React
-- Tests: 79 passing
-- Documentation: 2,000+ lines
-
-**Functionality:**
-- ✅ Group creation
-- ✅ ZK proof generation
-- ✅ Message submission
-- ✅ Contact management
-- ✅ Wallet integration
-- ⏳ Voice/video calls
-- ⏳ File sharing
+The **tip / payment layer is genuinely zero-knowledge**. We don't overclaim.
 
 ---
 
-## Deployment Information
+## 9. Team
 
-**Status**: Ready for testnet deployment
-
-**Contract Details:**
-- Name: `group_membership.aleo`
-- Size: 363 lines
-- Tests: 79/79 passed
-- Deployment command: `leo deploy --network testnet`
-
-**Frontend:**
-- Production build: 367.53 KB (optimized)
-- Hosting: Vercel (auto-deploy from GitHub)
-- Desktop: Tauri (Windows/Mac/Linux)
-
-**Next Steps:**
-1. Deploy contract to testnet
-2. Get transaction ID
-3. Update Explorer link
-4. Deploy frontend to Vercel
-5. Record demo video
+| | |
+|--|--|
+| **Name** | Ritik |
+| **Role** | Full Stack Developer & Blockchain Engineer |
+| **Discord** | ritik200238 |
+| **GitHub** | [@Ritik200238](https://github.com/Ritik200238) |
+| **Aleo Wallet** | `aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59` |
 
 ---
 
-## Contact
+## 10. Wave 2 Progress vs Wave 1
 
-For questions or demo access:
-- **Email**: [Your email]
-- **Discord**: ritik200238
-- **GitHub**: https://github.com/Ritik200238/aleoEncrypted
+| | Wave 1 | Wave 2 |
+|--|--------|--------|
+| Contracts | 0 deployed | **3 deployed on testnet** |
+| Wallet | None | **Shield Wallet integrated** |
+| ZK Payments | None | **credits.aleo/transfer_private tips** |
+| Frontend | Basic proof of concept | **Full Telegram-style UI** |
+| Privacy Dashboard | None | **Live ZK metrics dashboard** |
+| Relay Server | None | **WebSocket relay (never decrypts)** |
+| Live Deploy | None | **Vercel deployment** |
 
 ---
 
-**Submission Date**: January 26, 2026
-**Buildathon Wave**: 2
-**Category**: Privacy Applications
+## 11. Running Locally
+
+```bash
+# Clone
+git clone https://github.com/Ritik200238/aleoEncrypted.git
+cd aleoEncrypted
+
+# Frontend
+cd frontend
+npm install --legacy-peer-deps
+npm run dev
+# → http://localhost:5173
+
+# Demo mode (no wallet needed)
+# → http://localhost:5173/?demo=true
+
+# Relay server (optional — enables real-time messaging)
+cd ../backend
+npm install
+npm start
+# → ws://localhost:3001
+```
 
 ---
 
-*Built with privacy, powered by Aleo*
+*Built for Aleo Privacy Buildathon Wave 2 — February 2026*

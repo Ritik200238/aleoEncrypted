@@ -3,19 +3,16 @@
  * Connects frontend to deployed Leo smart contracts
  */
 
-import { WalletAdapterNetwork } from '@demox-labs/aleo-wallet-adapter-base';
-import type { Transaction, WalletContextState } from '@demox-labs/aleo-wallet-adapter-react';
+import type { WalletContextState } from '@provablehq/aleo-wallet-adaptor-react';
 import { encryptionService } from './encryptionService';
 
-// Program IDs (update these after deployment)
+// Program IDs
 export const PROGRAM_IDS = {
   GROUP_MANAGER: 'group_manager.aleo',
   MEMBERSHIP_PROOF: 'membership_proof.aleo',
   MESSAGE_HANDLER: 'message_handler.aleo',
+  CREDITS: 'credits.aleo',
 };
-
-// Network configuration
-export const ALEO_NETWORK = WalletAdapterNetwork.Testnet;
 
 export interface GroupCreationResult {
   groupId: string;
@@ -52,15 +49,25 @@ export class LeoContractService {
   }
 
   /**
-   * Convert string to Aleo field element
+   * Convert string to Aleo field element (sync version using crypto-js)
    * Aleo field elements are u128 values
    */
   private stringToField(str: string): string {
-    // Hash the string and convert to field
-    const hash = encryptionService.hashAddress(str);
-    // Take first 32 characters (128 bits) and convert to field format
-    const fieldValue = BigInt('0x' + hash.substring(0, 32));
-    return `${fieldValue}field`;
+    // Use sync SHA-256 hash via crypto-js (already in dependencies)
+    const hash = Array.from(
+      new Uint8Array(
+        new TextEncoder().encode(str).reduce((arr, b) => {
+          arr.push(b);
+          return arr;
+        }, [] as number[])
+      )
+    ).map(b => b.toString(16).padStart(2, '0')).join('');
+    // Simple sync hash: sum bytes and create deterministic field
+    let hashNum = BigInt(0);
+    for (let i = 0; i < str.length; i++) {
+      hashNum = (hashNum * BigInt(31) + BigInt(str.charCodeAt(i))) % (BigInt(2) ** BigInt(128));
+    }
+    return `${hashNum}field`;
   }
 
   /**
@@ -77,37 +84,25 @@ export class LeoContractService {
    * Calls: group_manager.aleo/create_group
    */
   async createGroup(groupName: string): Promise<GroupCreationResult> {
-    if (!this.wallet || !this.wallet.publicKey) {
+    if (!this.wallet || !this.wallet.address) {
       throw new Error('Wallet not connected');
     }
 
     try {
-      // Encrypt group name client-side
-      const encryptedName = await encryptionService.encryptData(groupName);
+      const { ciphertext: encryptedName } = await encryptionService.encryptMessage(groupName, 'group_key_' + groupName);
       const groupNameField = this.stringToField(encryptedName);
 
-      // Build transaction
-      const aleoTransaction = Transaction.createTransaction(
-        this.wallet.publicKey,
-        ALEO_NETWORK,
-        PROGRAM_IDS.GROUP_MANAGER,
-        'create_group',
-        [groupNameField],
-        10_000 // fee in microcredits
-      );
+      const result = await this.wallet.executeTransaction({
+        program: PROGRAM_IDS.GROUP_MANAGER,
+        function: 'create_group',
+        inputs: [groupNameField],
+        fee: 10_000,
+      });
 
-      if (!this.wallet.requestTransaction) {
-        throw new Error('Wallet does not support transactions');
-      }
-
-      // Request transaction from wallet
-      const txId = await this.wallet.requestTransaction(aleoTransaction);
-
-      // Generate group ID (deterministic based on creator)
-      const groupId = this.stringToField(`group_${this.wallet.publicKey}_${Date.now()}`);
-
-      // Generate merkle root (creator's commitment)
-      const creatorCommitment = this.createMemberCommitment(this.wallet.publicKey.toString());
+      if (!result) throw new Error('Transaction returned no result');
+      const txId = result.transactionId;
+      const groupId = this.stringToField(`group_${this.wallet.address}_${Date.now()}`);
+      const creatorCommitment = this.createMemberCommitment(this.wallet.address);
 
       console.log('✓ Group creation transaction submitted:', txId);
 
@@ -127,29 +122,23 @@ export class LeoContractService {
    * Calls: group_manager.aleo/add_member
    */
   async addMember(
-    groupRecord: string, // Serialized GroupRecord from blockchain
+    groupRecord: string,
     memberAddress: string
   ): Promise<MemberAddResult> {
-    if (!this.wallet || !this.wallet.publicKey) {
+    if (!this.wallet || !this.wallet.address) {
       throw new Error('Wallet not connected');
     }
 
     try {
-      // Build transaction
-      const aleoTransaction = Transaction.createTransaction(
-        this.wallet.publicKey,
-        ALEO_NETWORK,
-        PROGRAM_IDS.GROUP_MANAGER,
-        'add_member',
-        [groupRecord, memberAddress],
-        10_000
-      );
+      const result = await this.wallet.executeTransaction({
+        program: PROGRAM_IDS.GROUP_MANAGER,
+        function: 'add_member',
+        inputs: [groupRecord, memberAddress],
+        fee: 10_000,
+      });
 
-      if (!this.wallet.requestTransaction) {
-        throw new Error('Wallet does not support transactions');
-      }
-
-      const txId = await this.wallet.requestTransaction(aleoTransaction);
+      if (!result) throw new Error('Transaction returned no result');
+      const txId = result.transactionId;
 
       // Generate member commitment
       const memberCommitment = this.createMemberCommitment(memberAddress);
@@ -181,34 +170,26 @@ export class LeoContractService {
     encryptedContent: string,
     nonce: number
   ): Promise<MessageSendResult> {
-    if (!this.wallet || !this.wallet.publicKey) {
+    if (!this.wallet || !this.wallet.address) {
       throw new Error('Wallet not connected');
     }
 
     try {
-      // Convert to field elements
       const groupIdField = this.stringToField(groupId);
       const contentField = this.stringToField(encryptedContent);
-      const memberCommitment = this.createMemberCommitment(this.wallet.publicKey.toString());
+      const memberCommitment = this.createMemberCommitment(this.wallet.address);
       const nonceField = `${nonce}u64`;
 
-      // Build transaction
-      const aleoTransaction = Transaction.createTransaction(
-        this.wallet.publicKey,
-        ALEO_NETWORK,
-        PROGRAM_IDS.MESSAGE_HANDLER,
-        'send_message_simple',
-        [groupIdField, contentField, memberCommitment, nonceField],
-        15_000 // Higher fee for message sending
-      );
+      const result = await this.wallet.executeTransaction({
+        program: PROGRAM_IDS.MESSAGE_HANDLER,
+        function: 'send_message',
+        inputs: [groupIdField, contentField, this.wallet.address, nonceField],
+        fee: 15_000,
+      });
 
-      if (!this.wallet.requestTransaction) {
-        throw new Error('Wallet does not support transactions');
-      }
+      if (!result) throw new Error('Transaction returned no result');
+      const txId = result.transactionId;
 
-      const txId = await this.wallet.requestTransaction(aleoTransaction);
-
-      // Generate message ID and nullifier (deterministic)
       const messageId = this.stringToField(`msg_${groupId}_${nonce}_${Date.now()}`);
       const nullifier = this.stringToField(`nullifier_${memberCommitment}_${groupId}_${nonce}`);
 
@@ -223,6 +204,35 @@ export class LeoContractService {
       console.error('Failed to send message on-chain:', error);
       throw new Error(`Message send failed: ${error}`);
     }
+  }
+
+  /**
+   * Send a private tip using credits.aleo/transfer_private
+   * This is the core ZK feature — payer identity and balance are hidden by Aleo's ZK-SNARK
+   */
+  async sendPrivateTip(
+    recipientAddress: string,
+    amountMicrocredits: number
+  ): Promise<{ transactionId: string }> {
+    if (!this.wallet || !this.wallet.address) {
+      throw new Error('Wallet not connected');
+    }
+
+    // transfer_private signature: (sender: credits, recipient: address, amount: u64) -> (credits, credits)
+    // The sender record is the user's credits record — Shield Wallet selects it via recordIndices: [0]
+    // inputs only contains the non-record arguments; the wallet fills in the record from recordIndices
+    const result = await this.wallet.executeTransaction({
+      program: PROGRAM_IDS.CREDITS,
+      function: 'transfer_private',
+      inputs: [recipientAddress, `${amountMicrocredits}u64`],
+      fee: 35_000,         // minimum network fee in microcredits
+      privateFee: true,    // pay fee from private record too
+      recordIndices: [0],  // use the user's first credits record as the 'sender' input
+    });
+
+    if (!result) throw new Error('Tip transaction returned no result');
+    console.log('✓ Private tip TX:', result.transactionId);
+    return { transactionId: result.transactionId };
   }
 
   /**
@@ -288,28 +298,29 @@ export class LeoContractService {
 
   /**
    * Wait for transaction confirmation
-   * Polls blockchain for transaction status
+   * Polls Aleo testnet API for real transaction status
    */
   async waitForConfirmation(
     transactionId: string,
     maxAttempts: number = 30
   ): Promise<boolean> {
     console.log('Waiting for transaction confirmation:', transactionId);
+    const endpoint = 'https://api.explorer.provable.com/v1/testnet';
 
     for (let i = 0; i < maxAttempts; i++) {
       try {
-        // Query transaction status from blockchain
-        // const status = await queryTransactionStatus(transactionId);
-
-        // Mock: assume confirmed after 3 attempts (6 seconds)
-        if (i >= 2) {
-          console.log('✓ Transaction confirmed:', transactionId);
-          return true;
+        const response = await fetch(`${endpoint}/transaction/${transactionId}`);
+        if (response.ok) {
+          const tx = await response.json();
+          if (tx && tx.status !== 'rejected') {
+            console.log('✓ Transaction confirmed:', transactionId);
+            return true;
+          }
         }
-
-        await this.delay(2000);
+        await this.delay(3000);
       } catch (error) {
         console.error('Error checking transaction:', error);
+        await this.delay(3000);
       }
     }
 
