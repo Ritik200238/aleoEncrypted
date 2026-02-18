@@ -323,34 +323,21 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
         });
       }
 
-      // Simulate status progression for local messages
-      setTimeout(() => {
-        setAllMessages(prev => ({
-          ...prev,
-          [chatId]: (prev[chatId] || []).map(m => m.id === msg.id ? { ...m, status: 'delivered' as DeliveryStatus } : m),
-        }));
-      }, 1500);
-      setTimeout(() => {
-        setAllMessages(prev => ({
-          ...prev,
-          [chatId]: (prev[chatId] || []).map(m => m.id === msg.id ? { ...m, status: 'read' as DeliveryStatus } : m),
-        }));
-      }, 3000);
+      // Status is updated by the orchestrator when the blockchain TX confirms or WebSocket delivers
+      // (no fake setTimeout progression — real status comes from messagingOrchestrator callbacks)
     } catch (error) {
       console.error('Send failed:', error);
     }
   }, [messageInput, selectedChat, anonymousMode]);
 
-  // ─── Start call ───────────────────────────────────────
+  // ─── Start call (UI demo — WebRTC peer connection not yet implemented) ──────
   const startCall = useCallback((chat: OrchestratorChat, type: CallType) => {
     setActiveCall({
       chatId: chat.id, name: chat.name, avatar: chat.avatar,
       type, status: 'ringing', startTime: Date.now(),
       isMuted: false, isSpeaker: false, isVideoOn: type === 'video',
     });
-    setTimeout(() => {
-      setActiveCall(prev => prev ? { ...prev, status: 'connected', startTime: Date.now() } : null);
-    }, 3000);
+    // No auto-connect: call stays in 'ringing' state until manually answered or ended
   }, []);
 
   // ─── End call ─────────────────────────────────────────
@@ -513,9 +500,12 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
             {activeCall.status === 'ended' && 'Call ended'}
           </p>
           {activeCall.status === 'ringing' && (
-            <motion.div className="mt-4" animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 2, repeat: Infinity }}>
-              <div className="w-32 h-32 rounded-full mx-auto border-2 border-blue-400/30" />
-            </motion.div>
+            <>
+              <p className="text-[10px] text-slate-500 mt-1">P2P call · requires peer connection</p>
+              <motion.div className="mt-4" animate={{ scale: [1, 1.3, 1], opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 2, repeat: Infinity }}>
+                <div className="w-32 h-32 rounded-full mx-auto border-2 border-blue-400/30" />
+              </motion.div>
+            </>
           )}
         </div>
         <div className="z-10">
