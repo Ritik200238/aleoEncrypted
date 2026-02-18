@@ -18,15 +18,10 @@ program tip_receipt.aleo {
     mapping group_tip_counts: field => u64;
 
     // Constructor — required since Aleo ConsensusVersion V9.
-    // Called exactly once during deployment to initialize the program.
-    async transition initialize() -> Future {
-        return finalize_initialize();
-    }
-
-    async function finalize_initialize() {
-        // Mappings start empty — assert a trivial condition as required non-empty body
-        assert_eq(0u64, 0u64);
-    }
+    // @noupgrade locks the program to its initial version (no future upgrades).
+    // The Leo compiler generates the AVM constructor: `assert.eq edition 0u16`
+    @noupgrade
+    async constructor() {}
 
     // Record a ZK tip receipt on-chain.
     // Called AFTER credits.aleo/transfer_private succeeds.
