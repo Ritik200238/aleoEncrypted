@@ -11,53 +11,44 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Leo CLI from GitHub releases
         run: |
-          # Get latest Leo version tag
           LEO_VERSION=$(curl -sL https://api.github.com/repos/AleoHQ/leo/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
           echo "Latest Leo version: ${LEO_VERSION}"
-
-          # Use the Linux GNU binary (NOT leo.zip which is a cross-platform installer script)
           mkdir -p /tmp/leo_install
           curl -fL "https://github.com/AleoHQ/leo/releases/download/${LEO_VERSION}/leo-master-x86_64-unknown-linux-gnu.zip" \
             -o /tmp/leo_install/leo.zip
-          cd /tmp/leo_install
-          unzip -o leo.zip
-          echo "=== Contents of zip ==="
-          ls -la
-
-          # Find the ELF binary
-          LEO_BIN=$(find . -maxdepth 1 -type f | head -3)
-          echo "Files: $LEO_BIN"
-          # Move the binary — it may be named 'leo' or 'leo-master-x86_64-unknown-linux-gnu'
+          cd /tmp/leo_install && unzip -o leo.zip
           for f in leo leo-master-x86_64-unknown-linux-gnu; do
-            if [ -f "$f" ]; then
-              chmod +x "$f"
-              sudo mv "$f" /usr/local/bin/leo
-              break
-            fi
+            if [ -f "$f" ]; then chmod +x "$f" && sudo mv "$f" /usr/local/bin/leo && break; fi
           done
-          file /usr/local/bin/leo
           leo --version
+
+      - name: Start API proxy (fixes Leo v3.x /v1 URL bug)
+        run: |
+          # Leo v3.5.0 strips /v1 from endpoint URL — proxy adds it back
+          node .github/proxy.js &
+          sleep 2
+          echo "Proxy check: $(curl -s http://localhost:13337/testnet/block/height/latest)"
 
       - name: Deploy contract
         env:
           PRIVATE_KEY: ${{ secrets.ALEO_PRIVATE_KEY }}
         run: |
           CONTRACT="${{ github.event.inputs.contract }}"
-          echo "Deploying ${CONTRACT}..."
+          echo "Deploying ${CONTRACT} via proxy endpoint..."
           cd leo/${CONTRACT}
           leo deploy \
             --private-key "$PRIVATE_KEY" \
             --network testnet \
-            --endpoint https://api.explorer.provable.com/v1 \
+            --endpoint http://localhost:13337 \
             --yes 2>&1 | tee deploy_output.txt
           echo "=== Deploy output ==="
           cat deploy_output.txt
-          # Extract transaction ID if present
           TX_ID=$(grep -oP 'at1[a-z0-9]+' deploy_output.txt | head -1 || echo "")
           if [ -n "$TX_ID" ]; then
             echo "Transaction ID: $TX_ID"
