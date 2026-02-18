@@ -4,8 +4,21 @@
  * Deploys all 3 Leo contracts to Aleo Testnet
  *
  * Usage:
- *   ALEO_PRIVATE_KEY=<your_key> node deploy-all-contracts.mjs
+ *   node deploy-all-contracts.mjs
+ *
+ * Reads ALEO_PRIVATE_KEY from .env file (or existing environment variable).
+ * Copy .env.example to .env and fill in your key before running.
  */
+
+// Load .env file if present (dotenv)
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+try {
+  const { config } = require('dotenv');
+  config();
+} catch {
+  // dotenv not installed — rely on environment variables already set
+}
 
 import { Account, AleoNetworkClient, ProgramManager, AleoKeyProvider } from '@provablehq/sdk';
 import { readFileSync, writeFileSync } from 'fs';

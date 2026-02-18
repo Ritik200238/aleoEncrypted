@@ -14,7 +14,12 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
+// Support comma-separated list of origins for multi-env (local + Vercel)
+const rawOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const CORS_ORIGIN = rawOrigin.includes(',')
+  ? rawOrigin.split(',').map(o => o.trim())
+  : rawOrigin;
 
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
@@ -33,6 +38,33 @@ const io = new Server(httpServer, {
 const connectedUsers = new Map<string, string>(); // socketId -> userAddress
 const userSockets = new Map<string, string>();     // userAddress -> socketId
 
+// Rate limiting: max 30 events per second per socket
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 30;
+const RATE_WINDOW_MS = 1000;
+
+function isRateLimited(socketId: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(socketId);
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(socketId, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  if (entry.count > RATE_LIMIT) {
+    return true;
+  }
+  return false;
+}
+
+// Validate Aleo address: starts with "aleo1", total 63 chars, alphanumeric
+const ALEO_ADDRESS_RE = /^aleo1[a-z0-9]{58}$/;
+function isValidAleoAddress(addr: unknown): addr is string {
+  return typeof addr === 'string' && ALEO_ADDRESS_RE.test(addr);
+}
+
 // Health check endpoint
 app.get('/health', (_req, res) => {
   res.json({
@@ -46,7 +78,7 @@ app.get('/health', (_req, res) => {
 io.on('connection', (socket) => {
   const userAddress = socket.handshake.auth?.userAddress;
 
-  if (userAddress) {
+  if (userAddress && isValidAleoAddress(userAddress)) {
     connectedUsers.set(socket.id, userAddress);
     userSockets.set(userAddress, socket.id);
     console.log(`User connected: ${userAddress.substring(0, 12)}...`);
@@ -60,39 +92,71 @@ io.on('connection', (socket) => {
   }
 
   // Authenticate (alternative to handshake auth)
-  socket.on('authenticate', (data: { userAddress: string }) => {
-    if (data.userAddress) {
-      connectedUsers.set(socket.id, data.userAddress);
-      userSockets.set(data.userAddress, socket.id);
+  socket.on('authenticate', (data: { userAddress: unknown }) => {
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
     }
+    if (!isValidAleoAddress(data?.userAddress)) {
+      socket.emit('error', { code: 'INVALID_ADDRESS', message: 'Invalid Aleo address format' });
+      return;
+    }
+    connectedUsers.set(socket.id, data.userAddress as string);
+    userSockets.set(data.userAddress as string, socket.id);
+    socket.emit('authenticated', { address: data.userAddress });
   });
 
   // Join group room
-  socket.on('join_group', (data: { groupId: string }) => {
-    if (data.groupId) {
-      socket.join(data.groupId);
-      console.log(`${connectedUsers.get(socket.id)?.substring(0, 12)}... joined ${data.groupId}`);
+  socket.on('join_group', (data: { groupId: unknown }) => {
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
     }
+    if (typeof data?.groupId !== 'string' || data.groupId.trim() === '') {
+      socket.emit('error', { code: 'INVALID_GROUP', message: 'Invalid groupId' });
+      return;
+    }
+    socket.join(data.groupId);
+    console.log(`${connectedUsers.get(socket.id)?.substring(0, 12)}... joined ${data.groupId}`);
   });
 
   // Leave group room
-  socket.on('leave_group', (data: { groupId: string }) => {
-    if (data.groupId) {
+  socket.on('leave_group', (data: { groupId: unknown }) => {
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
+    }
+    if (typeof data?.groupId === 'string') {
       socket.leave(data.groupId);
     }
   });
 
-  // Relay encrypted message (server NEVER decrypts)
+  // Relay encrypted group/broadcast message (server NEVER decrypts)
   socket.on('send_message', (data: {
-    chatId: string;
-    messageId: string;
-    encryptedContent: string;
-    nonce?: string;
-    timestamp: number;
-    senderAddress?: string;
-    isAnonymous?: boolean;
+    chatId: unknown;
+    messageId: unknown;
+    encryptedContent: unknown;
+    nonce?: unknown;
+    timestamp: unknown;
+    senderAddress?: unknown;
+    isAnonymous?: unknown;
   }) => {
-    // Forward to room (group) or specific user (direct)
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
+    }
+
+    // Validate required fields
+    if (
+      typeof data?.chatId !== 'string' || data.chatId.trim() === '' ||
+      typeof data?.messageId !== 'string' || data.messageId.trim() === '' ||
+      typeof data?.encryptedContent !== 'string' || data.encryptedContent.trim() === '' ||
+      typeof data?.timestamp !== 'number'
+    ) {
+      socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'Missing or invalid message fields' });
+      return;
+    }
+
     const payload = {
       ...data,
       senderId: data.isAnonymous ? undefined : connectedUsers.get(socket.id),
@@ -100,27 +164,72 @@ io.on('connection', (socket) => {
 
     // Broadcast to chat room (excludes sender)
     socket.to(data.chatId).emit('new_message', payload);
+  });
 
-    // Also try direct delivery if it's a DM
-    if (!data.chatId.startsWith('group_')) {
-      // For DMs, find the recipient's socket
-      const senderAddr = connectedUsers.get(socket.id);
-      // The chatId for DMs typically contains or maps to the recipient
-      // Just broadcast to the room which both users should have joined
+  // Direct message — addressed to a specific Aleo user
+  socket.on('direct_message', (data: {
+    recipientAddress: unknown;
+    messageId: unknown;
+    encryptedContent: unknown;
+    nonce?: unknown;
+    timestamp: unknown;
+  }) => {
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
+    }
+
+    // Validate
+    if (
+      !isValidAleoAddress(data?.recipientAddress) ||
+      typeof data?.messageId !== 'string' || data.messageId.trim() === '' ||
+      typeof data?.encryptedContent !== 'string' || data.encryptedContent.trim() === '' ||
+      typeof data?.timestamp !== 'number'
+    ) {
+      socket.emit('error', { code: 'INVALID_PAYLOAD', message: 'Missing or invalid DM fields' });
+      return;
+    }
+
+    const recipientSocketId = userSockets.get(data.recipientAddress as string);
+
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('new_message', {
+        ...data,
+        senderId: connectedUsers.get(socket.id),
+        isDirect: true,
+      });
+    } else {
+      // Recipient is offline
+      socket.emit('delivery_failed', {
+        messageId: data.messageId,
+        recipientAddress: data.recipientAddress,
+        reason: 'recipient_offline',
+        timestamp: Date.now(),
+      });
     }
   });
 
   // Relay typing indicator
-  socket.on('typing', (data: { groupId: string; isTyping: boolean }) => {
+  socket.on('typing', (data: { groupId: unknown; isTyping: unknown }) => {
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
+    }
+    if (typeof data?.groupId !== 'string') return;
     socket.to(data.groupId).emit('typing', {
       groupId: data.groupId,
       userId: connectedUsers.get(socket.id),
-      isTyping: data.isTyping,
+      isTyping: !!data.isTyping,
     });
   });
 
   // Relay delivery receipt
-  socket.on('message_delivered', (data: { messageId: string }) => {
+  socket.on('message_delivered', (data: { messageId: unknown }) => {
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
+    }
+    if (typeof data?.messageId !== 'string') return;
     socket.broadcast.emit('message_delivered', {
       messageId: data.messageId,
       userId: connectedUsers.get(socket.id),
@@ -129,7 +238,12 @@ io.on('connection', (socket) => {
   });
 
   // Relay read receipt
-  socket.on('message_read', (data: { messageId: string }) => {
+  socket.on('message_read', (data: { messageId: unknown }) => {
+    if (isRateLimited(socket.id)) {
+      socket.disconnect(true);
+      return;
+    }
+    if (typeof data?.messageId !== 'string') return;
     socket.broadcast.emit('message_read', {
       messageId: data.messageId,
       userId: connectedUsers.get(socket.id),
@@ -155,6 +269,7 @@ io.on('connection', (socket) => {
       console.log(`User disconnected: ${addr.substring(0, 12)}...`);
     }
     connectedUsers.delete(socket.id);
+    rateLimitMap.delete(socket.id);
   });
 });
 
@@ -163,7 +278,7 @@ httpServer.listen(PORT, () => {
   ╔══════════════════════════════════════════════╗
   ║  EncryptedSocial Relay Server                ║
   ║  Port: ${PORT}                                  ║
-  ║  CORS: ${CORS_ORIGIN.padEnd(30)}        ║
+  ║  CORS: ${String(CORS_ORIGIN).padEnd(30)}        ║
   ║  Health: http://localhost:${PORT}/health          ║
   ║                                              ║
   ║  This server NEVER sees plaintext messages.  ║

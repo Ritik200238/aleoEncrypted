@@ -3,15 +3,51 @@
  * Production-ready wallet integration using @demox-labs/aleo-wallet-adapter
  *
  * Features:
- * - Real wallet connection (Leo Wallet, Puzzle Wallet, etc.)
- * - Session persistence
- * - Network detection (Testnet/Mainnet)
- * - Transaction handling with retries
+ * - Real wallet connection (Leo Wallet, Puzzle Wallet, Shield Wallet)
+ * - Generic window.aleo fallback
+ * - Session persistence with expiry
+ * - Network mismatch detection
+ * - Clear user-facing error messages
  * - Event listeners for wallet changes
  */
 
 import { WalletAdapter, WalletReadyState } from '@demox-labs/aleo-wallet-adapter-base';
 import { AleoNetwork } from '../types/aleo';
+
+// ── Wallet provider detection ────────────────────────────────────────────────
+
+export type DetectedWalletType = 'leo' | 'puzzle' | 'shield' | 'generic' | 'none';
+
+/**
+ * Detects which Aleo wallet providers are available in the browser window.
+ * Returns a list of detected wallet types so the UI can offer the right choices.
+ */
+export function detectAvailableWallets(): DetectedWalletType[] {
+  const detected: DetectedWalletType[] = [];
+  if (typeof window === 'undefined') return detected;
+
+  if ((window as any).leoWallet)    detected.push('leo');
+  if ((window as any).puzzle)       detected.push('puzzle');
+  if ((window as any).shieldWallet) detected.push('shield');
+  // Generic Aleo provider (some wallets inject window.aleo)
+  if ((window as any).aleo && !detected.includes('leo') && !detected.includes('shield'))
+    detected.push('generic');
+
+  return detected;
+}
+
+/**
+ * Maps a wallet type string to a human-readable install link message
+ * for when the wallet is not found.
+ */
+function walletInstallHint(type: DetectedWalletType): string {
+  switch (type) {
+    case 'leo':     return 'Install Leo Wallet from https://leo.app';
+    case 'puzzle':  return 'Install Puzzle Wallet from https://puzzle.online';
+    case 'shield':  return 'Install Shield Wallet from the Chrome Web Store';
+    default:        return 'Please install an Aleo-compatible wallet extension';
+  }
+}
 
 export interface WalletState {
   adapter: WalletAdapter | null;
@@ -65,9 +101,10 @@ class AleoWalletService {
   }
 
   /**
-   * Connect to Aleo wallet
+   * Connect to Aleo wallet.
+   * Throws descriptive errors distinguishing: not installed, wrong network, user rejected.
    */
-  async connect(adapter: WalletAdapter): Promise<string> {
+  async connect(adapter: WalletAdapter, walletType: DetectedWalletType = 'generic'): Promise<string> {
     if (this.state.connecting || this.state.connected) {
       throw new Error('Wallet already connecting or connected');
     }
@@ -75,32 +112,49 @@ class AleoWalletService {
     this.setState({ connecting: true });
 
     try {
-      // Check if wallet is ready
-      if (adapter.readyState !== WalletReadyState.Installed) {
-        throw new Error('Wallet not installed. Please install Leo Wallet or Puzzle Wallet.');
+      // Check if wallet extension is installed
+      if (adapter.readyState === WalletReadyState.NotDetected ||
+          adapter.readyState === WalletReadyState.Unsupported) {
+        throw new Error(
+          `Wallet not detected. ${walletInstallHint(walletType)}`
+        );
       }
 
-      // Connect to wallet
-      await adapter.connect();
+      console.log(`Connecting to wallet type: ${walletType}`);
 
-      // Get wallet address and public key
-      const address = await adapter.requestRecordPlaintexts?.('');
+      // Connect to wallet — user may reject this
+      try {
+        await adapter.connect();
+      } catch (connErr: any) {
+        const msg = connErr?.message ?? String(connErr);
+        if (/reject|cancel|denied|user/i.test(msg)) {
+          throw new Error('Connection rejected by user. Please approve the connection request in your wallet.');
+        }
+        throw connErr;
+      }
+
       const publicKey = adapter.publicKey;
 
       if (!publicKey) {
-        throw new Error('Failed to get wallet public key');
+        throw new Error('Failed to get wallet public key after connecting');
       }
 
       const walletAddress = publicKey.toString();
 
-      // Detect network
-      const network = this.detectNetwork();
+      // Detect network and warn on mismatch
+      const network = this.detectNetwork(adapter);
+      if (network === AleoNetwork.MAINNET) {
+        console.warn(
+          '⚠️  Wallet is on Mainnet. This app runs on Testnet. ' +
+          'Switch your wallet network to Testnet to use this app.'
+        );
+      }
 
       // Update state
       this.setState({
         adapter,
         address: walletAddress,
-        publicKey: publicKey.toString(),
+        publicKey: walletAddress,
         connected: true,
         connecting: false,
         network,
@@ -113,10 +167,9 @@ class AleoWalletService {
       // Save session
       this.saveSession(walletAddress, network);
 
-      console.log('✓ Wallet connected:', {
+      console.log(`✓ Wallet connected [${walletType}]:`, {
         address: walletAddress,
         network,
-        readyState: adapter.readyState,
       });
 
       return walletAddress;
@@ -311,9 +364,12 @@ class AleoWalletService {
     }
   }
 
-  private detectNetwork(): AleoNetwork {
-    // In production, query the wallet or blockchain to detect network
-    // For now, default to testnet
+  private detectNetwork(adapter?: WalletAdapter): AleoNetwork {
+    // Some adapters expose the network; fall back to testnet if not determinable
+    const raw = (adapter as any)?.network ?? (adapter as any)?.selectedNetwork ?? '';
+    if (typeof raw === 'string' && raw.toLowerCase().includes('mainnet')) {
+      return AleoNetwork.MAINNET;
+    }
     return AleoNetwork.TESTNET;
   }
 
@@ -333,20 +389,23 @@ class AleoWalletService {
   private loadSession(): void {
     try {
       const saved = localStorage.getItem(this.sessionKey);
-      if (saved) {
-        const session = JSON.parse(saved);
-        const age = Date.now() - session.timestamp;
+      if (!saved) return;
 
-        // Session valid for 7 days
-        if (age < 7 * 24 * 60 * 60 * 1000) {
-          this.state.network = session.network;
-          console.log('✓ Session restored:', session.address);
-        } else {
-          this.clearSession();
-        }
+      const session = JSON.parse(saved);
+      const age = Date.now() - session.timestamp;
+      const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+      if (age < SESSION_TTL) {
+        this.state.network = session.network;
+        console.log('✓ Session restored:', session.address);
+      } else {
+        console.warn('Session expired — wallet will need to reconnect');
+        this.clearSession();
+        this.notifyListeners('session_expired', this.state);
       }
     } catch (error) {
       console.error('Failed to load session:', error);
+      this.clearSession();
     }
   }
 
