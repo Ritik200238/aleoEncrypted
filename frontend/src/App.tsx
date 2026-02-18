@@ -25,9 +25,9 @@ const VERIFY_STEPS = [
     icon: Zap,
     iconColor: 'text-purple-400',
     title: 'Verify a ZK tip on-chain',
-    desc: 'After sending a tip in the app, the receipt ID is stored in the tip_receipts mapping. Query it directly:',
-    url: 'https://api.explorer.provable.com/v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{receipt_id}',
-    instruction: '→ Returns the tip amount (u64). Receipt ID proves tip occurred. Sender identity + balance hidden by ZK-SNARK.',
+    desc: 'Send a tip in the app → copy the TX ID from the receipt modal → view the TX on Aleo Explorer → query the tip_receipts mapping with the key from the TX output:',
+    url: 'https://explorer.aleo.org/transaction/at1cr03ja49m6prfjln7zpp9klt00fmcpzv2p704h5700n2sj8jq5zsqtk3uk?network=testnet',
+    instruction: '→ Deploy TX. Send a tip in-app → copy TX ID from receipt modal → view TX on explorer → find tip_receipts mapping key. Sender + balance hidden by Groth16 SNARK.',
   },
   {
     color: 'from-green-900/60 to-green-800/30',

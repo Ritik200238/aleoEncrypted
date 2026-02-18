@@ -1413,19 +1413,6 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
 
               <div className="space-y-3 mb-4">
                 <div>
-                  <div className="text-[11px] font-medium mb-1" style={{ color: t.textSecondary }}>Receipt ID (on-chain commitment)</div>
-                  <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: t.input }}>
-                    <span className="font-mono text-[10px] flex-1 truncate" style={{ color: t.text }}>
-                      {tipReceipt.receiptId}
-                    </span>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(tipReceipt.receiptId)}
-                      className="flex-shrink-0 p-1 rounded" style={{ color: t.accent }}>
-                      <Copy className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-                <div>
                   <div className="text-[11px] font-medium mb-1" style={{ color: t.textSecondary }}>Transaction ID</div>
                   <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: t.input }}>
                     <span className="font-mono text-[10px] flex-1 truncate" style={{ color: t.text }}>
@@ -1442,19 +1429,17 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
               </div>
 
               <div className="text-[11px] p-2 rounded-lg mb-4" style={{ background: '#22c55e10', color: '#22c55e' }}>
-                Judges can verify this tip on-chain:<br />
-                <span className="font-mono break-all">
-                  /v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{'{receiptId}'}
-                </span>
+                The ZK circuit computed a BHP256 receipt_id and stored it in <span className="font-mono">tip_receipts</span> mapping.<br />
+                View TX on explorer → find the <span className="font-mono">tip_receipts</span> mapping key to query on-chain.
               </div>
 
               <div className="flex gap-2">
                 <a
-                  href={`https://api.explorer.provable.com/v1/testnet/program/private_tips.aleo/mapping/tip_receipts/${tipReceipt.receiptId}`}
+                  href={getTransactionExplorerUrl(tipReceipt.txId)}
                   target="_blank" rel="noopener noreferrer"
                   className="flex-1 py-2 rounded-lg text-[13px] font-medium text-center text-white"
                   style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}>
-                  Verify on Explorer →
+                  View TX on Explorer →
                 </a>
                 <button onClick={() => setTipReceipt(null)}
                   className="flex-1 py-2 rounded-lg text-[13px]"
