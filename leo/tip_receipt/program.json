@@ -1,0 +1,6 @@
+{
+  "program": "tip_receipt.aleo",
+  "version": "0.1.0",
+  "description": "ZK tip receipt registry — stores BHP256 receipt commitments on-chain after credits.aleo/transfer_private tips",
+  "license": "MIT"
+}

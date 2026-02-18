@@ -1,0 +1,36 @@
+name: Deploy Leo Contracts to Aleo Testnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      contract:
+        description: 'Contract to deploy (tip_receipt or private_tips)'
+        required: true
+        default: 'tip_receipt'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Leo CLI
+        run: |
+          curl -L https://install.leo-lang.org | sh -s
+          echo "$HOME/.leo/bin" >> $GITHUB_PATH
+
+      - name: Deploy contract
+        env:
+          PRIVATE_KEY: ${{ secrets.ALEO_PRIVATE_KEY }}
+        run: |
+          CONTRACT="${{ github.event.inputs.contract }}"
+          echo "Deploying ${CONTRACT}..."
+          cd leo/${CONTRACT}
+          leo add credits --network testnet || true
+          leo deploy \
+            --private-key "$PRIVATE_KEY" \
+            --network testnet \
+            --endpoint https://api.explorer.provable.com/v1 \
+            --yes 2>&1 | tee deploy_output.txt
+          echo "Deploy complete"
+          cat deploy_output.txt
