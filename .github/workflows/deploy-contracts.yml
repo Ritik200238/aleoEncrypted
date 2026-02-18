@@ -46,6 +46,7 @@ jobs:
             --private-key "$PRIVATE_KEY" \
             --network testnet \
             --endpoint http://localhost:13337 \
+            --broadcast \
             --yes 2>&1 | tee deploy_output.txt
           echo "=== Deploy output ==="
           cat deploy_output.txt
