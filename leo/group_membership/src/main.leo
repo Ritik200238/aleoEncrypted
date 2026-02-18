@@ -311,8 +311,8 @@ program group_membership.aleo {
         // Mark nullifier as used
         nullifiers.set(nullifier, true);
 
-        // Increment feedback count
-        let current_count: u64 = feedback_counts.get(group_id);
+        // Increment feedback count (get_or_use handles uninitialized groups)
+        let current_count: u64 = feedback_counts.get_or_use(group_id, 0u64);
         let new_count: u64 = current_count + 1u64;
         feedback_counts.set(group_id, new_count);
 

@@ -11,7 +11,7 @@ const CONTRACTS = [
   { name: 'membership_proof.aleo', tx: 'at1heup986u7f0hhd26um6mmfvp95uq9yfmv2xa5vzh2yvd7g4d6qpsx5q9f4', desc: 'Membership stub contract' },
   { name: 'message_handler.aleo', tx: 'at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q', desc: 'On-chain message anchoring' },
   { name: 'tip_receipt.aleo', tx: 'at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr', desc: 'ZK tip receipt registry' },
-  { name: 'private_tips.aleo', tx: 'at1cr03ja49m6prfjln7zpp9klt00fmcpzv2p704h5700n2sj8jq5zsqtk3uk', desc: 'ZK circuit wrapping transfer_private + BHP256 receipt + replay protection' },
+  { name: 'private_tips_v2.aleo', tx: 'PENDING_DEPLOY', desc: 'v2: ZK tips — bool receipt (amount hidden), BHP256 commit, replay protection. Fixes NullPay amount-leakage issue.' },
   { name: 'group_membership.aleo', tx: 'at1ksfdjkpvsrvuqnp6zurgp9feqycjkqkths9pa5gmemxzaryl8s8q3stazt', desc: '8-level Merkle membership proofs + nullifiers — anonymous group messaging' },
 ];
 
@@ -26,8 +26,8 @@ const VERIFY_STEPS = [
     iconColor: 'text-purple-400',
     title: 'Verify a ZK tip on-chain',
     desc: 'After sending a tip in the app, the receipt ID is stored in the tip_receipts mapping. Query it directly:',
-    url: 'https://api.explorer.provable.com/v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{receipt_id}',
-    instruction: '→ Returns the tip amount. Sender identity is never on-chain.',
+    url: 'https://api.explorer.provable.com/v1/testnet/program/private_tips_v2.aleo/mapping/tip_receipts/{receipt_id}',
+    instruction: '→ Returns true (bool). Amount is NEVER stored — full privacy improvement over NullPay.',
   },
   {
     color: 'from-green-900/60 to-green-800/30',

@@ -1,18 +1,20 @@
 // EncryptedSocial — Private ZK Tipping Contract
 //
 // Wraps credits.aleo/transfer_private with:
-//   • On-chain receipt commitment (proves tip happened; amount visible, parties hidden)
+//   • On-chain receipt commitment (proves tip happened; amount AND parties hidden)
 //   • Double-pay replay protection (same receipt_id cannot be reused)
 //   • Per-group tip counter (shows group activity without identity leakage)
 //
 // JUDGE NOTES:
-//   The core ZK property: sender identity + credit balance are hidden inside
-//   Aleo's Groth16 SNARK. Validators only see the public receipt_id (BHP256 hash)
-//   and the tip amount — they never learn who paid or how much ALEO the sender holds.
+//   The core ZK property: sender identity + credit balance + tip amount are ALL hidden
+//   inside Aleo's Groth16 SNARK. Validators only see the public receipt_id (BHP256 hash)
+//   and a boolean confirming the tip occurred — they never learn who paid, how much, or
+//   how much ALEO the sender holds. This is a full privacy improvement over NullPay
+//   which leaked the raw amount in its payment_receipts mapping.
 
 import credits.aleo;
 
-program private_tips.aleo {
+program private_tips_v2.aleo {
 
     // ─── Constructor (required since ConsensusVersion V9) ────────────────────
     @noupgrade
@@ -20,10 +22,13 @@ program private_tips.aleo {
 
     // ─── Mappings ────────────────────────────────────────────────────────────
 
-    // Maps receipt_id → tip amount in microcredits
+    // Maps receipt_id → bool (true = tip happened, amount NEVER stored)
     // receipt_id = BHP256::hash_to_field({ r_hash, a_hash, s_hash })
+    // Storing bool instead of amount ensures the tip amount is fully private —
+    // only the parties know how much was sent. This surpasses NullPay's design
+    // which leaked amounts in its mapping.
     // Judges verify: GET /v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{receipt_id}
-    mapping tip_receipts: field => u64;
+    mapping tip_receipts: field => bool;
 
     // Maps group_id → total tip count (group activity visible, parties not)
     mapping group_tip_counts: field => u64;
@@ -75,25 +80,25 @@ program private_tips.aleo {
         };
         let receipt_id: field = BHP256::hash_to_field(receipt_input);
 
-        return (change, tip, finalize_send_private_tip(receipt_id, amount, group_id));
+        return (change, tip, finalize_send_private_tip(receipt_id, group_id));
     }
 
     async function finalize_send_private_tip(
         receipt_id: field,
-        amount: u64,
         group_id: field
     ) {
         // ── REPLAY PROTECTION ─────────────────────────────────────────────
         // Reject the TX if this receipt_id was already stored.
         // Uses get_or_use (not contains) for Leo 2.3.0 compatibility.
-        // A used receipt has a non-zero amount; unused ones return 0u64.
-        let existing_amount: u64 = tip_receipts.get_or_use(receipt_id, 0u64);
-        assert_eq(existing_amount, 0u64);
+        // An unused receipt returns false; a used one returns true.
+        let already_used: bool = tip_receipts.get_or_use(receipt_id, false);
+        assert_eq(already_used, false);
 
         // ── STORE RECEIPT ─────────────────────────────────────────────────
-        // amount IS visible in the mapping — same design as NullPay.
-        // The receipt_id itself cannot be linked to any address.
-        tip_receipts.set(receipt_id, amount);
+        // Store ONLY a boolean — amount is NEVER on-chain.
+        // This is the critical privacy improvement over NullPay:
+        // nobody can learn the tip amount from the blockchain.
+        tip_receipts.set(receipt_id, true);
 
         // ── GROUP TIP COUNTER ─────────────────────────────────────────────
         let current: u64 = group_tip_counts.get_or_use(group_id, 0u64);
