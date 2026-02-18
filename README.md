@@ -9,8 +9,8 @@
 
 ## Live Demo
 
-🌐 **[EncryptedSocial — Live App](https://frontend-lyart-three-71.vercel.app)**
-📱 Demo mode (no wallet): [frontend-lyart-three-71.vercel.app/?demo=true](https://frontend-lyart-three-71.vercel.app/?demo=true)
+🌐 **[EncryptedSocial — Live App](https://encrypted-social-aleo.vercel.app)**
+📱 Demo mode (no wallet): [encrypted-social-aleo.vercel.app/?demo=true](https://encrypted-social-aleo.vercel.app/?demo=true)
 
 ## What It Does
 
@@ -28,6 +28,7 @@ This is not "Signal on blockchain." The **payment layer is genuinely zero-knowle
 | `group_manager.aleo` | Create/manage private groups | [`at12gkmeg...`](https://explorer.aleo.org/transaction/at12gkmegshtlsjgzfpng4ls8mprlwc0s5l9573wy9khlqcelf97cqs36kwew?network=testnet) |
 | `membership_proof.aleo` | Group membership verification | [`at1heup98...`](https://explorer.aleo.org/transaction/at1heup986u7f0hhd26um6mmfvp95uq9yfmv2xa5vzh2yvd7g4d6qpsx5q9f4?network=testnet) |
 | `message_handler.aleo` | On-chain message records | [`at1nejj3t...`](https://explorer.aleo.org/transaction/at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q?network=testnet) |
+| `tip_receipt.aleo` | ZK tip receipt registry | [`at17zg5ef...`](https://explorer.aleo.org/transaction/at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr?network=testnet) |
 
 ## Architecture
 
