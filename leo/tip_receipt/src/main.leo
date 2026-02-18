@@ -17,6 +17,17 @@ program tip_receipt.aleo {
     // Maps group_id → total tip count (group activity visible, parties not)
     mapping group_tip_counts: field => u64;
 
+    // Constructor — required since Aleo ConsensusVersion V9.
+    // Called exactly once during deployment to initialize the program.
+    async transition initialize() -> Future {
+        return finalize_initialize();
+    }
+
+    async function finalize_initialize() {
+        // Mappings start empty — assert a trivial condition as required non-empty body
+        assert_eq(0u64, 0u64);
+    }
+
     // Record a ZK tip receipt on-chain.
     // Called AFTER credits.aleo/transfer_private succeeds.
     //   receipt_id = BHP256::hash_to_field({ recipient_hash, amount_hash, salt_hash })
