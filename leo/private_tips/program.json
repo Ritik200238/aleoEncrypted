@@ -1,0 +1,14 @@
+{
+  "program": "private_tips.aleo",
+  "version": "0.1.0",
+  "description": "Private ZK tipping for EncryptedSocial — wraps credits.aleo/transfer_private with on-chain receipt commitments and double-pay replay protection",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "credits.aleo",
+      "location": "network",
+      "network": "testnet",
+      "path": null
+    }
+  ]
+}
