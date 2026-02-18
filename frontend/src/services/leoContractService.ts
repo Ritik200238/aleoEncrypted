@@ -9,7 +9,7 @@ import { encryptionService } from './encryptionService';
 // Program IDs
 export const PROGRAM_IDS = {
   GROUP_MANAGER: 'group_manager.aleo',
-  GROUP_MEMBERSHIP: 'group_membership.aleo',
+  GROUP_MEMBERSHIP: 'group_membership.aleo', // ✅ DEPLOYED — TX: at1ksfdjkpvsrvuqnp6zurgp9feqycjkqkths9pa5gmemxzaryl8s8q3stazt
   MEMBERSHIP_PROOF: 'membership_proof.aleo',
   MESSAGE_HANDLER: 'message_handler.aleo',
   TIP_RECEIPT: 'tip_receipt.aleo',     // ✅ DEPLOYED — TX: at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr

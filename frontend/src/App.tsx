@@ -12,6 +12,7 @@ const CONTRACTS = [
   { name: 'message_handler.aleo', tx: 'at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q', desc: 'On-chain message anchoring' },
   { name: 'tip_receipt.aleo', tx: 'at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr', desc: 'ZK tip receipt registry' },
   { name: 'private_tips.aleo', tx: 'at1cr03ja49m6prfjln7zpp9klt00fmcpzv2p704h5700n2sj8jq5zsqtk3uk', desc: 'ZK circuit wrapping transfer_private + BHP256 receipt + replay protection' },
+  { name: 'group_membership.aleo', tx: 'at1ksfdjkpvsrvuqnp6zurgp9feqycjkqkths9pa5gmemxzaryl8s8q3stazt', desc: '8-level Merkle membership proofs + nullifiers — anonymous group messaging' },
 ];
 
 // Judge verification cards — 3 things to verify in 2 minutes
@@ -81,7 +82,7 @@ function App() {
         {/* Demo banner */}
         <div className="flex items-center justify-between px-4 py-2 text-xs font-mono shrink-0"
           style={{ background: 'linear-gradient(90deg, #1e1b4b, #312e81)', color: '#a5b4fc' }}>
-          <span>🔬 DEMO MODE — Aleo Testnet · group_manager · membership_proof · message_handler · tip_receipt deployed</span>
+          <span>🔬 DEMO MODE — Aleo Testnet · All 6 contracts deployed: group_manager · membership_proof · message_handler · tip_receipt · private_tips · group_membership</span>
           <div className="flex gap-4">
             {CONTRACTS.slice(0, 2).map(c => (
               <a key={c.name} href={`https://explorer.aleo.org/transaction/${c.tx}?network=testnet`}

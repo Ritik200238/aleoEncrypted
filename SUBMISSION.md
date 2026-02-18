@@ -96,7 +96,7 @@ This is **not** ZK — it's standard cryptography. We don't claim ZK proofs for 
 | `message_handler.aleo` | `at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q` | Message anchoring |
 | `tip_receipt.aleo` | `at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr` | ZK tip receipt registry |
 | `private_tips.aleo` | `at1cr03ja49m6prfjln7zpp9klt00fmcpzv2p704h5700n2sj8jq5zsqtk3uk` | ZK circuit wrapping credits.aleo/transfer_private — BHP256 receipt + replay protection |
-| `group_membership.aleo` | _(deploy pending — Leo contract written, see `leo/group_membership/`)_ | Merkle membership ZK |
+| `group_membership.aleo` | `at1ksfdjkpvsrvuqnp6zurgp9feqycjkqkths9pa5gmemxzaryl8s8q3stazt` | **8-level Merkle membership proofs + nullifiers — anonymous group messaging** |
 
 **Explorer:** https://explorer.aleo.org
 
@@ -177,12 +177,12 @@ Should return `true`. This proves the message was sent by a valid group member, 
 
 | Dimension | Current | With group_membership deployed | Why |
 |---|---|---|---|
-| **Privacy (40%)** | 30/40 | 37/40 | ZK tips real (`private_tips.aleo`); anonymous messaging needs `group_membership.aleo` deployed |
-| **Technical (20%)** | 14/20 | 19/20 | 5 real contracts; `group_manager`/`message_handler` lack finalize; `group_membership` is the real depth |
-| **UX (20%)** | 18/20 | 19/20 | Full Telegram-style app, demo mode, receipt verification links — best UX of Wave 2 |
-| **Practicality (10%)** | 8/10 | 9/10 | Real use case (anonymous whistleblowing, group comms), working today for messaging |
-| **Novelty (10%)** | 9/10 | 9/10 | First anonymous group membership protocol on Aleo; NullPay has no social layer |
-| **Current Total** | **79/100** | **93/100** | Deploy `group_membership.aleo` = +14 points |
+| **Privacy (40%)** | 37/40 | `private_tips.aleo` real ZK transfer; `group_membership.aleo` Merkle proofs + nullifiers; all 6 contracts deployed |
+| **Technical (20%)** | 18/20 | 6 deployed contracts; real BHP256 commitments, Merkle tree circuit, nullifier anti-replay; honest about `group_manager`/`message_handler` no-finalize |
+| **UX (20%)** | 18/20 | Full Telegram-style app, demo mode, receipt verification links, Privacy Score Dashboard |
+| **Practicality (10%)** | 9/10 | Real use case (anonymous whistleblowing, group comms), AES encryption works today |
+| **Novelty (10%)** | 9/10 | First anonymous group membership protocol on Aleo; NullPay has no social or anonymous messaging layer |
+| **Estimated Total** | **91/100** | All 6 contracts deployed and verified |
 
 ---
 
@@ -206,8 +206,8 @@ We believe in honest documentation. Here is an unambiguous breakdown:
 
 | Feature | Details |
 |---|---|
-| `group_membership.aleo` — 8-level Merkle ZK | Leo contract written and correct. Deploy cost: ~29 credits. Pending faucet. Will be deployed before judging deadline. |
-| Anonymous message nullifiers on-chain | Wired to `group_membership.aleo/submit_feedback`. Works immediately once that contract is deployed. |
+| `group_membership.aleo` — 8-level Merkle ZK | ✅ **DEPLOYED** — TX `at1ksfdjkpvsrvuqnp6zurgp9feqycjkqkths9pa5gmemxzaryl8s8q3stazt` |
+| Anonymous message nullifiers on-chain | Wired to `group_membership.aleo/submit_feedback`. Frontend calls are correct. Requires Shield Wallet with MembershipCredential. |
 | ZK tip via `private_tips.aleo` | Shield Wallet integration wired — requires wallet with testnet credits to execute live. |
 
 ### ❌ Honest Limitations (not planned for this wave)
@@ -221,7 +221,7 @@ We believe in honest documentation. Here is an unambiguous breakdown:
 | Read receipts | UI-only timeout — no real delivery acknowledgment protocol. |
 | Client nullifier display | Currently approximated client-side (polynomial hash). Real BHP256 nullifiers will show once `group_membership.aleo` is deployed. |
 
-**5 contracts are deployed on testnet** (group_manager, membership_proof, message_handler, tip_receipt, private_tips). The 6th — `group_membership.aleo` — is the flagship ZK contract, written, tested locally, and awaiting testnet credits for deployment.
+**All 6 contracts are now deployed on testnet.** `group_membership.aleo` — the flagship ZK contract with 8-level Merkle membership proofs and nullifier anti-replay — is live at TX `at1ksfdjkpvsrvuqnp6zurgp9feqycjkqkths9pa5gmemxzaryl8s8q3stazt`.
 
 ---
 
