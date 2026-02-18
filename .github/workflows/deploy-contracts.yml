@@ -14,10 +14,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Leo CLI
+      - name: Install Leo CLI from GitHub releases
         run: |
-          curl -L https://install.leo-lang.org | sh -s
-          echo "$HOME/.leo/bin" >> $GITHUB_PATH
+          # Download Leo binary directly from GitHub releases (bypasses install.leo-lang.org DNS)
+          LEO_VERSION=$(curl -s https://api.github.com/repos/AleoHQ/leo/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Installing Leo ${LEO_VERSION}"
+          curl -L "https://github.com/AleoHQ/leo/releases/download/${LEO_VERSION}/leo-master-x86_64-unknown-linux-musl.zip" -o leo.zip
+          unzip leo.zip
+          # The zip may contain a binary named 'leo' or 'leo-master-...'
+          chmod +x leo* 2>/dev/null || true
+          ls -la
+          sudo mv leo /usr/local/bin/ 2>/dev/null || sudo mv leo-master-x86_64-unknown-linux-musl /usr/local/bin/leo
+          leo --version
 
       - name: Deploy contract
         env:
@@ -26,11 +34,16 @@ jobs:
           CONTRACT="${{ github.event.inputs.contract }}"
           echo "Deploying ${CONTRACT}..."
           cd leo/${CONTRACT}
-          leo add credits --network testnet || true
           leo deploy \
             --private-key "$PRIVATE_KEY" \
             --network testnet \
             --endpoint https://api.explorer.provable.com/v1 \
             --yes 2>&1 | tee deploy_output.txt
-          echo "Deploy complete"
+          echo "=== Deploy output ==="
           cat deploy_output.txt
+          # Extract transaction ID if present
+          TX_ID=$(grep -oP 'at1[a-z0-9]+' deploy_output.txt | head -1 || true)
+          if [ -n "$TX_ID" ]; then
+            echo "Transaction ID: $TX_ID"
+            echo "Explorer: https://explorer.aleo.org/transaction/$TX_ID?network=testnet"
+          fi
