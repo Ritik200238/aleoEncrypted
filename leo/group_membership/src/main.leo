@@ -49,6 +49,10 @@ program group_membership.aleo {
     // We use a composite key by hashing group_id with index
     mapping feedback_storage: field => field;
 
+    // Constructor — required since Aleo ConsensusVersion V9
+    @noupgrade
+    async constructor() {}
+
     // ========== STRUCTS FOR HASHING ==========
 
     struct HashPair {
@@ -360,4 +364,5 @@ program group_membership.aleo {
     // Retrieve feedback content hash by index (read-only, no finalize needed)
     // Note: For reading data, query the feedback_storage mapping directly off-chain
     // using the composite key: hash_pair(group_id, feedback_index as field)
+
 }
