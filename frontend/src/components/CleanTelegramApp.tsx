@@ -18,18 +18,16 @@ import {
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import type { Contact } from '../models/Contact';
 import { messagingOrchestrator, type OrchestratorMessage, type OrchestratorChat } from '../services/messagingOrchestrator';
-import { databaseService } from '../services/databaseService';
 import { contactService } from '../services/contactService';
 import { leoContractService } from '../services/leoContractService';
 import { TransactionToast, type Transaction as TxType } from './TransactionStatus';
 import { ZKVerifiedIndicator } from './ZKProofBadge';
 import { AnonymousMessageToggle } from './AnonymousMessageToggle';
 import { PrivacyScoreDashboard } from './PrivacyScoreDashboard';
-import { ALEO_CONFIG, getTransactionExplorerUrl } from '../config/aleoConfig';
+import { getTransactionExplorerUrl } from '../config/aleoConfig';
 
 // ─── Types ──────────────────────────────────────────────
 type ViewType = 'chats' | 'contacts' | 'calls' | 'settings';
-type DeliveryStatus = 'sending' | 'sent' | 'delivered' | 'read';
 type ThemeMode = 'dark' | 'light';
 type CallStatus = 'idle' | 'ringing' | 'connected' | 'ended';
 type CallType = 'voice' | 'video';
@@ -249,6 +247,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
     init();
 
     return () => { messagingOrchestrator.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userAddress, address]);
 
   // ─── Load messages when chat selected ─────────────────
@@ -260,6 +259,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
         }
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChat?.id]);
 
   // ─── Persist theme ────────────────────────────────────
@@ -1051,9 +1051,9 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                 );
               })}
 
-              {/* Typing indicator — driven by local state, not chat object */}
+              {/* Typing indicator — shown when selectedChat.isTyping is set by WebSocket */}
               <AnimatePresence>
-                {false && (
+                {selectedChat?.isTyping && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
                     className="flex justify-start mb-2">
                     <div className="px-4 py-3 rounded-[16px] rounded-bl-[4px]" style={{ background: t.msgOther }}>
