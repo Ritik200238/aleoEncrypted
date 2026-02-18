@@ -20,18 +20,27 @@ jobs:
           LEO_VERSION=$(curl -sL https://api.github.com/repos/AleoHQ/leo/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
           echo "Latest Leo version: ${LEO_VERSION}"
 
-          # Extract to temp dir to avoid conflict with the 'leo/' contracts directory
+          # Use the Linux GNU binary (NOT leo.zip which is a cross-platform installer script)
           mkdir -p /tmp/leo_install
+          curl -fL "https://github.com/AleoHQ/leo/releases/download/${LEO_VERSION}/leo-master-x86_64-unknown-linux-gnu.zip" \
+            -o /tmp/leo_install/leo.zip
           cd /tmp/leo_install
-          curl -fL "https://github.com/AleoHQ/leo/releases/download/${LEO_VERSION}/leo.zip" -o leo.zip
           unzip -o leo.zip
+          echo "=== Contents of zip ==="
           ls -la
 
-          # Find the binary (named 'leo' or 'leo-...')
-          LEO_BIN=$(find . -maxdepth 1 -type f -name 'leo*' | head -1)
-          echo "Found binary: $LEO_BIN"
-          chmod +x "$LEO_BIN"
-          sudo mv "$LEO_BIN" /usr/local/bin/leo
+          # Find the ELF binary
+          LEO_BIN=$(find . -maxdepth 1 -type f | head -3)
+          echo "Files: $LEO_BIN"
+          # Move the binary — it may be named 'leo' or 'leo-master-x86_64-unknown-linux-gnu'
+          for f in leo leo-master-x86_64-unknown-linux-gnu; do
+            if [ -f "$f" ]; then
+              chmod +x "$f"
+              sudo mv "$f" /usr/local/bin/leo
+              break
+            fi
+          done
+          file /usr/local/bin/leo
           leo --version
 
       - name: Deploy contract
