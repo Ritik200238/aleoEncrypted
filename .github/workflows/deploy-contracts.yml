@@ -20,16 +20,15 @@ jobs:
           LEO_VERSION=$(curl -sL https://api.github.com/repos/AleoHQ/leo/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
           echo "Latest Leo version: ${LEO_VERSION}"
 
-          # Try the generic leo.zip first (most likely to contain just the binary)
-          echo "Downloading leo.zip..."
+          # Extract to temp dir to avoid conflict with the 'leo/' contracts directory
+          mkdir -p /tmp/leo_install
+          cd /tmp/leo_install
           curl -fL "https://github.com/AleoHQ/leo/releases/download/${LEO_VERSION}/leo.zip" -o leo.zip
-
-          echo "Extracting..."
           unzip -o leo.zip
           ls -la
 
-          # Find the leo binary (could be named 'leo' or 'leo-master-...')
-          LEO_BIN=$(ls leo leo-* 2>/dev/null | head -1)
+          # Find the binary (named 'leo' or 'leo-...')
+          LEO_BIN=$(find . -maxdepth 1 -type f -name 'leo*' | head -1)
           echo "Found binary: $LEO_BIN"
           chmod +x "$LEO_BIN"
           sudo mv "$LEO_BIN" /usr/local/bin/leo
