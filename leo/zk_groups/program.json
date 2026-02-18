@@ -1,0 +1,6 @@
+{
+    "program": "zk_groups.aleo",
+    "version": "0.1.0",
+    "description": "Anonymous group membership via commitment-based ZK proofs",
+    "license": "MIT"
+}

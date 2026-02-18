@@ -65,12 +65,14 @@ export class UserRegistryService {
   }
 
   /**
-   * Convert string to Aleo field element
+   * Convert string to Aleo field element (sync)
    */
   private stringToField(str: string): string {
-    const hash = encryptionService.hashAddress(str);
-    const fieldValue = BigInt('0x' + hash.substring(0, 32));
-    return `${fieldValue}field`;
+    let hashNum = BigInt(0);
+    for (let i = 0; i < str.length; i++) {
+      hashNum = (hashNum * BigInt(31) + BigInt(str.charCodeAt(i))) % (BigInt(2) ** BigInt(128));
+    }
+    return `${hashNum}field`;
   }
 
   /**
@@ -103,8 +105,8 @@ export class UserRegistryService {
     bio: string;
   }): Promise<string> {
     const profileJson = JSON.stringify(profile);
-    const encrypted = await encryptionService.encryptData(profileJson);
-    return this.stringToField(encrypted);
+    const { ciphertext } = await encryptionService.encryptMessage(profileJson, 'profile_encryption_key');
+    return this.stringToField(ciphertext);
   }
 
   /**

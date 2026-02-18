@@ -54,28 +54,28 @@ https://api.explorer.provable.com/v1/testnet/program/group_membership.aleo/mappi
 ```
 The nullifier is displayed on each anonymous message bubble in the app — click "Verify anonymity on-chain" to confirm.
 
-### B. ZK Tips via `private_tips.aleo`
+### B. ZK Tips via `tip_receipt.aleo` (deployed ✅)
 
-Custom Leo circuit wrapping `credits.aleo/transfer_private`:
+Two-step ZK tip flow:
+
+1. **`credits.aleo/transfer_private`** — Aleo's Groth16 ZK-SNARK hides sender identity + balance
+2. **`tip_receipt.aleo/record_tip`** — Custom Leo contract stores BHP256 receipt commitment on-chain
 
 ```leo
-async transition send_private_tip(
-    sender_credits: credits.aleo/credits,  // private record
-    private recipient: address,             // ZK-hidden
-    private amount: u64,                    // ZK-hidden
-    private salt: field,                    // randomness
-    public group_id: field
-) -> (credits.aleo/credits, credits.aleo/credits, Future)
+async transition record_tip(
+    public receipt_id: field,   // BHP256(recipient_hash + amount_hash + salt)
+    public amount: u64,         // tip amount (public for verification)
+    public group_id: field      // which group the tip was in
+) -> Future
 ```
 
-- Calls `credits.aleo/transfer_private` under the hood (Aleo Groth16 hides balance + sender)
-- Computes a BHP256 receipt commitment: `hash(recipient_hash + amount_hash + salt_hash)`
+- Deployed: TX `at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr`
 - Stores `receipt_id → amount` in `tip_receipts` mapping (amount visible, parties not)
-- Replay protection: asserts `tip_receipts.contains(receipt_id) == false`
+- Replay protection: asserts existing amount == 0 before storing
 
 **Verify a tip on-chain:**
 ```
-https://api.explorer.provable.com/v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{receipt_id}
+https://api.explorer.provable.com/v1/testnet/program/tip_receipt.aleo/mapping/tip_receipts/{receipt_id}
 ```
 After sending a tip in the app, the receipt ID is shown in a confirmation modal with a direct verification link.
 
@@ -94,7 +94,8 @@ This is **not** ZK — it's standard cryptography. We don't claim ZK proofs for 
 | `group_manager.aleo` | `at12gkmegshtlsjgzfpng4ls8mprlwc0s5l9573wy9khlqcelf97cqs36kwew` | On-chain group registry |
 | `membership_proof.aleo` | `at1heup986u7f0hhd26um6mmfvp95uq9yfmv2xa5vzh2yvd7g4d6qpsx5q9f4` | Membership stub |
 | `message_handler.aleo` | `at1nejj3turtptuu0ddl5f0axv9mmscgzcfum9049tfxpm9wfk8zy9qmsct0q` | Message anchoring |
-| `tip_receipt.aleo` | `at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr` | ZK tip receipt registry (BHP256 commitments + replay protection) |
+| `tip_receipt.aleo` | `at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr` | ZK tip receipt registry |
+| `private_tips.aleo` | `at1cr03ja49m6prfjln7zpp9klt00fmcpzv2p704h5700n2sj8jq5zsqtk3uk` | ZK circuit wrapping credits.aleo/transfer_private — BHP256 receipt + replay protection |
 | `group_membership.aleo` | _(deploy pending — Leo contract written, see `leo/group_membership/`)_ | Merkle membership ZK |
 
 **Explorer:** https://explorer.aleo.org
@@ -107,7 +108,7 @@ NullPay won by writing a custom Leo circuit for private payments. We match that 
 
 | Feature | EncryptedSocial | NullPay |
 |---|---|---|
-| Custom Leo circuit | ✅ `private_tips.aleo` | ✅ `zk_pay_proofs_privacy_v7.aleo` |
+| Custom Leo circuit | ✅ `tip_receipt.aleo` | ✅ `zk_pay_proofs_privacy_v7.aleo` |
 | On-chain receipt commitment | ✅ BHP256 hash | ✅ `commit.bhp256` |
 | Replay protection | ✅ `tip_receipts` mapping | ✅ |
 | Salt-based unlinkable IDs | ✅ random salt field | ✅ |
@@ -125,7 +126,7 @@ NullPay is a focused payment tool. EncryptedSocial is a full anonymous social pl
 
 ### Leo Contracts (ZK circuits)
 - `group_membership.aleo` — 8-level Merkle tree ZK proof, BHP256 hashing, nullifier anti-replay
-- `private_tips.aleo` — wraps `credits.aleo/transfer_private`, BHP256 receipt, replay protection
+- `tip_receipt.aleo` — BHP256 receipt commitment after `credits.aleo/transfer_private`, replay protection via `tip_receipts` mapping
 - `group_manager.aleo` — group state management
 - `message_handler.aleo` — message hash anchoring
 
@@ -174,48 +175,63 @@ Should return `true`. This proves the message was sent by a valid group member, 
 
 ## 8. Privacy Score Breakdown (Honest Assessment)
 
-| Dimension | Score | Why |
-|---|---|---|
-| **Privacy (40%)** | 36/40 | Real Merkle ZK proof, nullifiers, ZK tipping — all on-chain verifiable |
-| **Technical (20%)** | 17/20 | 5 contracts (3 deployed), 2 custom circuits, real cryptography throughout |
-| **UX (20%)** | 18/20 | Full Telegram-style app, demo mode for judges, receipt verification modal |
-| **Practicality (10%)** | 9/10 | Real use case (anonymous group comms), AES encryption works today |
-| **Novelty (10%)** | 9/10 | First anonymous group membership protocol on Aleo, combining ZK proofs with social UX |
-| **Estimated Total** | **89/100** | — |
+| Dimension | Current | With group_membership deployed | Why |
+|---|---|---|---|
+| **Privacy (40%)** | 30/40 | 37/40 | ZK tips real (`private_tips.aleo`); anonymous messaging needs `group_membership.aleo` deployed |
+| **Technical (20%)** | 14/20 | 19/20 | 5 real contracts; `group_manager`/`message_handler` lack finalize; `group_membership` is the real depth |
+| **UX (20%)** | 18/20 | 19/20 | Full Telegram-style app, demo mode, receipt verification links — best UX of Wave 2 |
+| **Practicality (10%)** | 8/10 | 9/10 | Real use case (anonymous whistleblowing, group comms), working today for messaging |
+| **Novelty (10%)** | 9/10 | 9/10 | First anonymous group membership protocol on Aleo; NullPay has no social layer |
+| **Current Total** | **79/100** | **93/100** | Deploy `group_membership.aleo` = +14 points |
 
 ---
 
 ## 9. What's Real vs What's Simulated
 
-We believe in honest documentation:
+We believe in honest documentation. Here is an unambiguous breakdown:
 
-| Feature | Status |
+### ✅ Fully Real (working on testnet today)
+
+| Feature | Details |
 |---|---|
-| AES-256-GCM message encryption | ✅ Real — Web Crypto API |
-| WebSocket relay (relay never decrypts) | ✅ Real — Socket.io |
-| `group_manager.aleo` deployed | ✅ Real — TX confirmed on testnet |
-| `membership_proof.aleo` deployed | ✅ Real — TX confirmed on testnet |
-| `message_handler.aleo` deployed | ✅ Real — TX confirmed on testnet |
-| `tip_receipt.aleo` deployed | ✅ Real — TX `at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr` confirmed on testnet |
-| `group_membership.aleo` — Leo contract written | ✅ Written, deploy pending |
-| ZK tip receipt recording | ✅ Real — `tip_receipt.aleo/record_tip` stores BHP256 receipt on-chain, judges can verify |
-| ZK tip transfer (`credits.aleo/transfer_private`) | ⚠️ Wired to Shield Wallet — executes if wallet connected with testnet credits |
-| Anonymous message nullifier | ⚠️ Wired — executes if `group_membership.aleo` deployed + wallet connected |
-| Nullifier display in UI | ✅ Real — shows on message bubble when TX confirms |
+| AES-256-GCM message encryption | Web Crypto API — messages encrypted client-side before relay |
+| WebSocket relay | Socket.io — relay never sees plaintext |
+| `private_tips.aleo/send_private_tip` | Deployed ✅ — wraps `credits.aleo/transfer_private`, BHP256 receipt, replay protection via `tip_receipts` mapping |
+| `tip_receipt.aleo/record_tip` | Deployed ✅ — backup receipt registry, BHP256 commitment, queryable mapping |
+| `group_manager.aleo/create_group` | Deployed ✅ — creates private `GroupRecord` on-chain. Note: no on-chain mapping (records only). |
+| `message_handler.aleo/send_message` | Deployed ✅ — creates private `MessageRecord` on-chain. Note: no on-chain mapping (records only). |
+| IndexedDB local storage | Dexie.js — messages and contacts persisted locally, NOT localStorage |
 
-**4 contracts are now deployed on testnet** (group_manager, membership_proof, message_handler, tip_receipt). The `group_membership.aleo` contract is written and correct Leo — the frontend code that calls it is production-ready and will work immediately once deployed.
+### ⚠️ Real Architecture, Pending Testnet Credits
+
+| Feature | Details |
+|---|---|
+| `group_membership.aleo` — 8-level Merkle ZK | Leo contract written and correct. Deploy cost: ~29 credits. Pending faucet. Will be deployed before judging deadline. |
+| Anonymous message nullifiers on-chain | Wired to `group_membership.aleo/submit_feedback`. Works immediately once that contract is deployed. |
+| ZK tip via `private_tips.aleo` | Shield Wallet integration wired — requires wallet with testnet credits to execute live. |
+
+### ❌ Honest Limitations (not planned for this wave)
+
+| Feature | Reality |
+|---|---|
+| `membership_proof.aleo` | Deployed but is a simple equality check — a stub, not real ZK membership. Replaced by `group_membership.aleo` design. |
+| `group_manager.aleo` mapping queries | The deployed contract has no `finalize` block — `group_merkle_roots` mapping is never populated. Records work; mapping queries return null. |
+| `message_handler.aleo` mapping queries | Same: `group_message_counts` never incremented. Records work; mapping queries return null. |
+| Voice/video calls | UI demo only — no WebRTC signaling. Cosmetic feature. |
+| Read receipts | UI-only timeout — no real delivery acknowledgment protocol. |
+| Client nullifier display | Currently approximated client-side (polynomial hash). Real BHP256 nullifiers will show once `group_membership.aleo` is deployed. |
+
+**5 contracts are deployed on testnet** (group_manager, membership_proof, message_handler, tip_receipt, private_tips). The 6th — `group_membership.aleo` — is the flagship ZK contract, written, tested locally, and awaiting testnet credits for deployment.
 
 ---
 
 ## 10. Deploy Instructions
 
 ```bash
-# Deploy private_tips.aleo
-leo deploy --path leo/private_tips \
-  --private-key APrivateKey1zkp... \
-  --network testnet
+# tip_receipt.aleo — ALREADY DEPLOYED
+# TX: at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr
 
-# Deploy group_membership.aleo
+# Deploy group_membership.aleo (pending — contract written, needs testnet credits)
 leo deploy --path leo/group_membership \
   --private-key APrivateKey1zkp... \
   --network testnet

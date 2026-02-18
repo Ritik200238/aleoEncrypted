@@ -13,29 +13,12 @@
  * Production-ready with comprehensive error handling.
  */
 
-// Socket.io types (for type safety without actual dependency)
-// In production, install: npm install socket.io-client
-interface SocketOptions {
-  reconnection?: boolean;
-  reconnectionAttempts?: number;
-  reconnectionDelay?: number;
-  reconnectionDelayMax?: number;
-  timeout?: number;
-  transports?: string[];
-}
-
-interface Socket {
-  connect(): void;
-  disconnect(): void;
-  on(event: string, callback: (...args: any[]) => void): void;
-  off(event: string, callback?: (...args: any[]) => void): void;
-  emit(event: string, ...args: any[]): void;
-  connected: boolean;
-}
+import { io, type Socket } from 'socket.io-client';
 
 // WebSocket configuration
+// Priority: VITE_WS_URL env var → Railway deployment URL → localhost fallback
 const WS_CONFIG = {
-  url: import.meta.env.VITE_WS_URL || 'ws://localhost:3001',
+  url: import.meta.env.VITE_WS_URL || (import.meta.env.PROD ? 'wss://encrypted-social-relay.up.railway.app' : 'ws://localhost:3001'),
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
   reconnectionDelayMax: 10000,
@@ -151,15 +134,12 @@ export class WebSocketService {
    */
   private async checkAvailability(): Promise<void> {
     try {
-      // Try to connect to WebSocket server
-      // In production, implement actual availability check
-      // For now, assume not available (fallback to polling)
-      this.isAvailable = false;
-
-      // Uncomment when Socket.io server is ready:
-      // const response = await fetch(`${WS_CONFIG.url}/health`);
-      // this.isAvailable = response.ok;
-    } catch (error) {
+      const healthUrl = WS_CONFIG.url.replace('ws://', 'http://').replace('wss://', 'https://');
+      const response = await fetch(`${healthUrl}/health`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      this.isAvailable = response.ok;
+    } catch {
       this.isAvailable = false;
     }
   }
@@ -168,65 +148,20 @@ export class WebSocketService {
    * Initialize Socket.io client
    */
   private initializeSocket(): void {
-    // Mock Socket.io client for MVP
-    // In production, replace with actual Socket.io:
-    // import io from 'socket.io-client';
-    // this.socket = io(WS_CONFIG.url, socketOptions);
+    const wsUrl = WS_CONFIG.url.replace('ws://', 'http://').replace('wss://', 'https://');
 
-    const socketOptions: SocketOptions = {
+    this.socket = io(wsUrl, {
       reconnection: true,
       reconnectionAttempts: WS_CONFIG.reconnectionAttempts,
       reconnectionDelay: WS_CONFIG.reconnectionDelay,
       reconnectionDelayMax: WS_CONFIG.reconnectionDelayMax,
       timeout: WS_CONFIG.timeout,
       transports: ['websocket', 'polling'],
-    };
-
-    // Mock socket for now
-    this.socket = this.createMockSocket();
+      auth: { userAddress: this.userAddress },
+    });
 
     // Set up event handlers
     this.setupSocketHandlers();
-  }
-
-  /**
-   * Create mock socket for development
-   * Remove this in production and use actual Socket.io
-   */
-  private createMockSocket(): Socket {
-    const handlers = new Map<string, ((...args: any[]) => void)[]>();
-
-    return {
-      connect: () => {
-        console.log('Mock socket: connect()');
-      },
-      disconnect: () => {
-        console.log('Mock socket: disconnect()');
-      },
-      on: (event: string, callback: (...args: any[]) => void) => {
-        if (!handlers.has(event)) {
-          handlers.set(event, []);
-        }
-        handlers.get(event)!.push(callback);
-      },
-      off: (event: string, callback?: (...args: any[]) => void) => {
-        if (callback) {
-          const eventHandlers = handlers.get(event);
-          if (eventHandlers) {
-            const index = eventHandlers.indexOf(callback);
-            if (index !== -1) {
-              eventHandlers.splice(index, 1);
-            }
-          }
-        } else {
-          handlers.delete(event);
-        }
-      },
-      emit: (event: string, ...args: any[]) => {
-        console.log(`Mock socket: emit(${event})`, args);
-      },
-      connected: false,
-    };
   }
 
   /**

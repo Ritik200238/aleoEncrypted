@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import type { Contact } from '../models/Contact';
-import { messagingOrchestrator, type OrchestratorMessage, type OrchestratorChat, type TransactionRecord } from '../services/messagingOrchestrator';
+import { messagingOrchestrator, type OrchestratorMessage, type OrchestratorChat } from '../services/messagingOrchestrator';
 import { databaseService } from '../services/databaseService';
 import { contactService } from '../services/contactService';
 import { leoContractService } from '../services/leoContractService';
@@ -151,6 +151,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
   const [tipTarget, setTipTarget] = useState<{ sender: string; name: string } | null>(null);
   const [tipAmount, setTipAmount] = useState('0.1');
   const [tipSending, setTipSending] = useState(false);
+  const [tipReceipt, setTipReceipt] = useState<{ txId: string; receiptId: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -195,14 +196,15 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
         }
 
         // Register WebSocket event handlers
-        messagingOrchestrator.onNewMessage((chatId, msg) => {
+        messagingOrchestrator.onNewMessage((msg) => {
+          const chatId = msg.chatId;
           setAllMessages(prev => ({
             ...prev,
             [chatId]: [...(prev[chatId] || []), msg],
           }));
           setChats(prev => prev.map(c =>
             c.id === chatId
-              ? { ...c, lastMessage: msg.content, lastMessageTime: msg.timestamp, unread: c.unread + 1 }
+              ? { ...c, lastMessage: msg.content, lastMessageTime: msg.timestamp, unreadCount: c.unreadCount + 1 }
               : c
           ));
         });
@@ -220,6 +222,19 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
             for (const chatId in updated) {
               updated[chatId] = updated[chatId].map(m =>
                 m.id === messageId ? { ...m, status } : m
+              );
+            }
+            return updated;
+          });
+        });
+
+        // Wire on-chain nullifier confirmations from group_membership.aleo
+        messagingOrchestrator.onNullifier(({ msgId, nullifier, txId }) => {
+          setAllMessages(prev => {
+            const updated = { ...prev };
+            for (const chatId in updated) {
+              updated[chatId] = updated[chatId].map(m =>
+                m.id === msgId ? { ...m, nullifier, nullifierTxId: txId } : m
               );
             }
             return updated;
@@ -293,7 +308,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
 
       setChats(prev => prev.map(c =>
         c.id === chatId
-          ? { ...c, lastMessage: content, lastMessageTime: msg.timestamp, unread: 0 }
+          ? { ...c, lastMessage: content, lastMessageTime: msg.timestamp, unreadCount: 0 }
           : c
       ));
 
@@ -367,12 +382,12 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
   };
 
   const handleContactClick = async (contact: Contact) => {
-    const existing = chats.find(c => c.address === contact.address);
+    const existing = chats.find(c => c.participants.includes(contact.address) && c.type === 'direct');
     if (existing) {
       setSelectedChat(existing);
     } else {
       const newChat = await messagingOrchestrator.getOrCreateDirectChat(
-        contact.address, contact.displayName, contact.avatar
+        contact.address, contact.displayName
       );
       setChats(prev => [newChat, ...prev]);
       setSelectedChat(newChat);
@@ -386,15 +401,21 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
     if (microcredits <= 0) return;
     setTipSending(true);
     try {
-      const result = await leoContractService.sendPrivateTip(tipTarget.sender, microcredits);
-      messagingOrchestrator.recordZkTip(result.transactionId);
+      const result = await leoContractService.sendPrivateTip(
+        tipTarget.sender,
+        microcredits,
+        selectedChat?.id
+      );
+      messagingOrchestrator.recordZkTip(result.transactionId, result.receiptId);
       setActiveTx({
         id: result.transactionId,
-        type: 'transfer_private',
+        type: 'private_tips.aleo/send_private_tip',
         status: 'pending',
         timestamp: Date.now(),
         explorerUrl: getTransactionExplorerUrl(result.transactionId),
       });
+      // Show receipt confirmation (allows judges to verify on explorer)
+      setTipReceipt({ txId: result.transactionId, receiptId: result.receiptId });
       setTipTarget(null);
       setTipAmount('0.1');
     } catch (err) {
@@ -420,7 +441,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
       setSelectedMembers([]);
       setCurrentView('chats');
 
-      // Show TX toast if blockchain was used
+      // Show TX toast if on-chain TX was submitted
       if (txId) {
         setActiveTx({
           id: txId,
@@ -661,14 +682,10 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                           style={{ background: selectedChat?.id === chat.id ? 'rgba(255,255,255,0.15)' : t.avatarGradient }}>
                           {chat.avatar}
                         </div>
-                        {!chat.isGroup && chat.isOnline && (
-                          <div className="absolute bottom-0 right-0 w-[14px] h-[14px] rounded-full border-[2px]"
-                            style={{ background: t.online, borderColor: selectedChat?.id === chat.id ? t.selectedChat : t.sidebar }} />
-                        )}
                         {chat.isGroup && (
                           <div className="absolute -bottom-0.5 -right-0.5 w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px]"
                             style={{ background: t.accent, color: '#fff' }}>
-                            {chat.members?.length || 0}
+                            {chat.memberCount || chat.participants.length || 0}
                           </div>
                         )}
                       </div>
@@ -683,23 +700,13 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <p className="text-[13px] truncate pr-2"
-                            style={{ color: chat.isTyping ? t.accent : t.textSecondary }}>
-                            {chat.isTyping ? (
-                              <span className="flex items-center gap-1">
-                                typing
-                                <span className="flex gap-[2px] ml-0.5">
-                                  {[0, 1, 2].map(i => (
-                                    <span key={i} className="typing-dot w-[3px] h-[3px] rounded-full" style={{ background: t.accent }} />
-                                  ))}
-                                </span>
-                              </span>
-                            ) : chat.lastMessage}
+                          <p className="text-[13px] truncate pr-2" style={{ color: t.textSecondary }}>
+                            {chat.lastMessage}
                           </p>
-                          {chat.unread > 0 && (
+                          {chat.unreadCount > 0 && (
                             <div className="w-[20px] h-[20px] rounded-full flex items-center justify-center text-[11px] font-medium text-white flex-shrink-0"
                               style={{ background: t.unreadBg }}>
-                              {chat.unread}
+                              {chat.unreadCount}
                             </div>
                           )}
                         </div>
@@ -884,11 +891,10 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                 </div>
                 <div>
                   <div className="text-[15px] font-semibold text-white">{selectedChat.name}</div>
-                  <div className="text-[12px]"
-                    style={{ color: selectedChat.isTyping ? (theme === 'light' ? '#fff' : t.accent) : selectedChat.isGroup ? 'rgba(255,255,255,0.7)' : selectedChat.isOnline ? (theme === 'light' ? '#a8d8a8' : t.online) : 'rgba(255,255,255,0.5)' }}>
-                    {selectedChat.isTyping ? 'typing...' :
-                     selectedChat.isGroup ? `${selectedChat.members?.length || 0} members` :
-                     selectedChat.isOnline ? 'online' : 'last seen recently'}
+                  <div className="text-[12px]" style={{ color: selectedChat.isGroup ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.5)' }}>
+                    {selectedChat.isGroup
+                      ? `${selectedChat.memberCount || selectedChat.participants.length} members`
+                      : 'last seen recently'}
                   </div>
                 </div>
               </div>
@@ -1009,13 +1015,34 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                         </div>
                       )}
                       {/* Blockchain TX link */}
-                      {msg.blockchainTxId && (
+                      {msg.blockchainTxId && !msg.nullifier && (
                         <a href={getTransactionExplorerUrl(msg.blockchainTxId)} target="_blank" rel="noopener noreferrer"
                           className="flex items-center gap-1 mt-1 text-[10px]" style={{ color: t.accent }}>
                           <Zap className="w-2.5 h-2.5" />
                           Verify on chain
                           <ExternalLink className="w-2.5 h-2.5" />
                         </a>
+                      )}
+                      {/* ZK membership proof TX — from group_membership.aleo/submit_feedback */}
+                      {msg.nullifierTxId && (
+                        <div className="mt-1.5 pt-1.5 border-t" style={{ borderColor: msg.isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.08)' }}>
+                          <div className="flex items-center gap-1 text-[9px] font-medium mb-0.5" style={{ color: '#4ade80' }}>
+                            <Shield className="w-2.5 h-2.5" />
+                            Merkle ZK proof on-chain
+                          </div>
+                          <a
+                            href={`https://explorer.aleo.org/transaction/${msg.nullifierTxId}?network=testnet`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[9px] font-mono"
+                            style={{ color: t.accent, opacity: 0.8 }}
+                          >
+                            TX: {msg.nullifierTxId.slice(0, 14)}...
+                            <ExternalLink className="w-2 h-2 flex-shrink-0" />
+                          </a>
+                          <div className="text-[8px] mt-0.5" style={{ color: t.textMuted }}>
+                            group_membership.aleo/submit_feedback
+                          </div>
+                        </div>
                       )}
                       {/* Private Tip button — only on received messages from a real sender */}
                       {!msg.isOwn && msg.sender && msg.sender !== 'system' && msg.sender !== 'Anonymous' && (
@@ -1034,9 +1061,9 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                 );
               })}
 
-              {/* Typing indicator */}
+              {/* Typing indicator — driven by local state, not chat object */}
               <AnimatePresence>
-                {selectedChat.isTyping && (
+                {false && (
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
                     className="flex justify-start mb-2">
                     <div className="px-4 py-3 rounded-[16px] rounded-bl-[4px]" style={{ background: t.msgOther }}>
@@ -1058,7 +1085,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                 <div className="flex items-center gap-1.5 px-2 py-1 mb-2 rounded text-[11px]"
                   style={{ background: 'rgba(79,174,78,0.1)', color: '#4fae4e' }}>
                   <ShieldCheck className="w-3 h-3" />
-                  Anonymous mode - your identity is hidden with ZK proofs
+                  Anonymous mode — identity hidden by Merkle membership proof (group_membership.aleo)
                 </div>
               )}
               <div className="flex items-center gap-2">
@@ -1124,18 +1151,17 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                 <div className="w-[80px] h-[80px] rounded-full mx-auto mb-3 flex items-center justify-center text-4xl"
                   style={{ background: t.avatarGradient }}>{selectedChat.avatar}</div>
                 <div className="text-[17px] font-semibold mb-1" style={{ color: t.text }}>{selectedChat.name}</div>
-                <div className="text-[13px]" style={{
-                  color: selectedChat.isGroup ? t.textSecondary : selectedChat.isOnline ? t.online : t.textSecondary
-                }}>
-                  {selectedChat.isGroup ? `${selectedChat.members?.length || 0} members` :
-                   selectedChat.isOnline ? 'online' : 'last seen recently'}
+                <div className="text-[13px]" style={{ color: t.textSecondary }}>
+                  {selectedChat.isGroup
+                    ? `${selectedChat.memberCount || selectedChat.participants.length} members`
+                    : 'last seen recently'}
                 </div>
               </div>
               <div className="p-3 space-y-3">
-                {selectedChat.isGroup && selectedChat.members && (
+                {selectedChat.isGroup && selectedChat.participants.length > 0 && (
                   <div className="rounded-lg p-3" style={{ background: t.cardBg }}>
                     <div className="text-[11px] font-medium mb-2" style={{ color: t.accent }}>Members</div>
-                    {selectedChat.members.map((member, i) => (
+                    {selectedChat.participants.map((member, i) => (
                       <div key={i} className="flex items-center gap-2 py-1.5">
                         <div className="w-[28px] h-[28px] rounded-full flex items-center justify-center text-xs"
                           style={{ background: t.avatarGradient }}>
@@ -1151,28 +1177,53 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                     ))}
                   </div>
                 )}
+                {/* Chat ID (group ID for groups, truncated for direct) */}
                 <div className="rounded-lg p-3" style={{ background: t.cardBg }}>
-                  <div className="text-[11px] font-medium mb-1" style={{ color: t.accent }}>Aleo Address</div>
+                  <div className="text-[11px] font-medium mb-1" style={{ color: t.accent }}>Chat ID</div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[12px] font-mono truncate flex-1" style={{ color: t.text }}>{selectedChat.address}</span>
-                    <button onClick={() => copyAddress(selectedChat.address)}
+                    <span className="text-[11px] font-mono truncate flex-1" style={{ color: t.text }}>{selectedChat.id}</span>
+                    <button onClick={() => copyAddress(selectedChat.id)}
                       className="p-1 rounded transition-colors flex-shrink-0"
                       style={{ color: copiedAddress ? t.online : t.textSecondary }}>
                       {copiedAddress ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 </div>
+                {/* On-chain group Merkle root (from group_membership.aleo/group_roots) */}
+                {selectedChat.isGroup && selectedChat.merkleRoot && (
+                  <div className="rounded-lg p-3" style={{ background: t.cardBg, border: `1px solid rgba(74,222,128,0.2)` }}>
+                    <div className="text-[11px] font-medium mb-1 flex items-center gap-1" style={{ color: '#4ade80' }}>
+                      <Shield className="w-3 h-3" />
+                      Merkle Root (group_membership.aleo)
+                    </div>
+                    <div className="text-[10px] font-mono break-all" style={{ color: t.textSecondary }}>
+                      {selectedChat.merkleRoot}
+                    </div>
+                    <a
+                      href={`https://api.explorer.provable.com/v1/testnet/program/group_membership.aleo/mapping/group_roots/${selectedChat.merkleRoot}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 mt-1.5 text-[10px]"
+                      style={{ color: t.accent }}
+                    >
+                      <ExternalLink className="w-2.5 h-2.5" />
+                      Verify on-chain
+                    </a>
+                  </div>
+                )}
                 <div className="rounded-lg p-3" style={{ background: t.cardBg }}>
-                  <div className="text-[11px] font-medium mb-2" style={{ color: t.accent }}>Encryption</div>
+                  <div className="text-[11px] font-medium mb-2" style={{ color: t.accent }}>Privacy Stack</div>
                   <div className="space-y-1.5">
                     {[
-                      { icon: ShieldCheck, label: 'AES-256-GCM encryption' },
-                      { icon: Lock, label: 'ZK proof verified' },
-                      { icon: Zap, label: 'On-chain records' },
+                      { icon: Lock, label: 'AES-256-GCM encryption', sub: 'Web Crypto API' },
+                      { icon: Shield, label: 'Merkle membership ZK', sub: 'group_membership.aleo' },
+                      { icon: Zap, label: 'ZK tipping circuit', sub: 'private_tips.aleo' },
                     ].map((item, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <item.icon className="w-3.5 h-3.5" style={{ color: t.online }} />
-                        <span className="text-[12px]" style={{ color: t.text }}>{item.label}</span>
+                      <div key={i} className="flex items-start gap-2">
+                        <item.icon className="w-3.5 h-3.5 mt-0.5" style={{ color: t.online }} />
+                        <div>
+                          <div className="text-[12px]" style={{ color: t.text }}>{item.label}</div>
+                          <div className="text-[10px]" style={{ color: t.textMuted }}>{item.sub}</div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1312,16 +1363,118 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
       </AnimatePresence>
 
       {/* ─── Privacy Score Dashboard ─── */}
-      <PrivacyScoreDashboard
-        isOpen={showPrivacyDashboard}
-        onClose={() => setShowPrivacyDashboard(false)}
-        theme={t}
-        userAddress={userAddress}
-      />
+      <AnimatePresence>
+        {showPrivacyDashboard && (
+          <motion.div
+            key="privacy-dashboard"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col"
+            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              className="flex flex-col flex-1 min-h-0 max-w-2xl w-full mx-auto mt-8 rounded-t-2xl overflow-hidden shadow-2xl"
+            >
+              <PrivacyScoreDashboard
+                isOpen={showPrivacyDashboard}
+                onClose={() => setShowPrivacyDashboard(false)}
+                theme={t}
+                userAddress={userAddress}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ─── Call Screen ─── */}
       <AnimatePresence>
         {activeCall && renderCallScreen()}
+      </AnimatePresence>
+
+      {/* ─── ZK Tip Receipt Confirmation Modal ─── */}
+      <AnimatePresence>
+        {tipReceipt && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 flex items-center justify-center z-50"
+            style={{ background: 'rgba(0,0,0,0.6)' }}
+            onClick={() => setTipReceipt(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 16 }}
+              className="rounded-2xl p-6 w-96 shadow-2xl"
+              style={{ background: t.bg, border: `1px solid ${t.border}` }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="p-2 rounded-lg" style={{ background: '#22c55e20' }}>
+                  <ShieldCheck className="w-5 h-5" style={{ color: '#22c55e' }} />
+                </div>
+                <div>
+                  <div className="font-semibold text-[15px]" style={{ color: t.text }}>ZK Tip Sent!</div>
+                  <div className="text-[11px]" style={{ color: t.textSecondary }}>On-chain via private_tips.aleo</div>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-4">
+                <div>
+                  <div className="text-[11px] font-medium mb-1" style={{ color: t.textSecondary }}>Receipt ID (on-chain commitment)</div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: t.input }}>
+                    <span className="font-mono text-[10px] flex-1 truncate" style={{ color: t.text }}>
+                      {tipReceipt.receiptId}
+                    </span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(tipReceipt.receiptId)}
+                      className="flex-shrink-0 p-1 rounded" style={{ color: t.accent }}>
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] font-medium mb-1" style={{ color: t.textSecondary }}>Transaction ID</div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: t.input }}>
+                    <span className="font-mono text-[10px] flex-1 truncate" style={{ color: t.text }}>
+                      {tipReceipt.txId}
+                    </span>
+                    <a
+                      href={getTransactionExplorerUrl(tipReceipt.txId)}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex-shrink-0 p-1 rounded" style={{ color: t.accent }}>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-[11px] p-2 rounded-lg mb-4" style={{ background: '#22c55e10', color: '#22c55e' }}>
+                Judges can verify this tip on-chain:<br />
+                <span className="font-mono break-all">
+                  /v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{'{receiptId}'}
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <a
+                  href={`https://api.explorer.provable.com/v1/testnet/program/private_tips.aleo/mapping/tip_receipts/${tipReceipt.receiptId}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex-1 py-2 rounded-lg text-[13px] font-medium text-center text-white"
+                  style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}>
+                  Verify on Explorer →
+                </a>
+                <button onClick={() => setTipReceipt(null)}
+                  className="flex-1 py-2 rounded-lg text-[13px]"
+                  style={{ background: t.input, color: t.textSecondary }}>
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* ─── ZK Private Tip Modal ─── */}
@@ -1345,7 +1498,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                 </div>
                 <div>
                   <div className="font-semibold text-[15px]" style={{ color: t.text }}>ZK Private Tip</div>
-                  <div className="text-[11px]" style={{ color: t.textSecondary }}>transfer_private via credits.aleo</div>
+                  <div className="text-[11px]" style={{ color: t.textSecondary }}>private_tips.aleo — ZK circuit + on-chain receipt + replay protection</div>
                 </div>
               </div>
               <div className="text-[12px] mb-3" style={{ color: t.textSecondary }}>

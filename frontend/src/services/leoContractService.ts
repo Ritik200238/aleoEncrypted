@@ -13,6 +13,7 @@ export const PROGRAM_IDS = {
   MEMBERSHIP_PROOF: 'membership_proof.aleo',
   MESSAGE_HANDLER: 'message_handler.aleo',
   TIP_RECEIPT: 'tip_receipt.aleo',     // ✅ DEPLOYED — TX: at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr
+  PRIVATE_TIPS: 'private_tips.aleo',  // ✅ DEPLOYED — TX: at1cr03ja49m6prfjln7zpp9klt00fmcpzv2p704h5700n2sj8jq5zsqtk3uk
   CREDITS: 'credits.aleo',
 };
 
@@ -111,7 +112,7 @@ export class LeoContractService {
       const result = await this.wallet.executeTransaction({
         program: PROGRAM_IDS.GROUP_MANAGER,
         function: 'create_group',
-        inputs: [groupNameField],
+        inputs: [groupNameField, this.wallet.address],  // group_name + owner_addr (matches deployed signature)
         fee: 10_000,
       });
 
@@ -233,15 +234,18 @@ export class LeoContractService {
   }
 
   /**
-   * Send a ZK tip — two-step flow:
-   *   Step 1: credits.aleo/transfer_private (Aleo ZK-SNARK hides sender + balance)
-   *   Step 2: tip_receipt.aleo/record_tip (on-chain BHP256 receipt for judge verification)
+   * Send a ZK tip via private_tips.aleo/send_private_tip (deployed on testnet).
    *
-   * tip_receipt.aleo is deployed on testnet:
-   *   TX: at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr
+   * This is a SINGLE Leo transition that:
+   *   1. Calls credits.aleo/transfer_private internally (Aleo Groth16 ZK-SNARK hides sender + balance)
+   *   2. Computes a BHP256 receipt commitment on-chain
+   *   3. Stores receipt_id → amount in tip_receipts mapping (amount visible, parties hidden)
+   *   4. Enforces replay protection (same receipt_id cannot be reused)
    *
-   * Judges verify: GET /v1/testnet/program/tip_receipt.aleo/mapping/tip_receipts/{receipt_id}
-   * Returns the tip amount — parties are hidden.
+   * private_tips.aleo deployed: TX at1cr03ja49m6prfjln7zpp9klt00fmcpzv2p704h5700n2sj8jq5zsqtk3uk
+   *
+   * Judges verify: GET /v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{receipt_id}
+   * Returns the tip amount — sender identity never on-chain.
    */
   async sendPrivateTip(
     recipientAddress: string,
@@ -252,58 +256,44 @@ export class LeoContractService {
       throw new Error('Wallet not connected');
     }
 
-    // Generate random salt for receipt uniqueness (prevents receipt_id leaking recipient)
+    // Generate random salt — prevents receipt_id from leaking recipient address
     const saltBytes = crypto.getRandomValues(new Uint8Array(16));
     const saltBigInt = saltBytes.reduce((acc, b) => (acc << 8n) | BigInt(b), 0n);
     const saltField = `${saltBigInt % (2n ** 125n)}field`;
 
     const groupIdField = groupId ? this.stringToField(groupId) : '0field';
 
-    // Compute receipt_id client-side (same logic as Leo contract) for UI display
+    // Compute receipt_id client-side for immediate UI display.
+    // The real receipt_id is computed inside the Leo ZK circuit using BHP256.
     const receiptId = this.computeReceiptId(recipientAddress, amountMicrocredits, saltField);
 
-    // Step 1: Private transfer via credits.aleo (ZK-SNARK — sender + balance hidden)
-    const transferResult = await this.wallet.executeTransaction({
-      program: PROGRAM_IDS.CREDITS,
-      function: 'transfer_private',
-      inputs: [recipientAddress, `${amountMicrocredits}u64`],
-      fee: 35_000,
+    // Single ZK transition: private_tips.aleo/send_private_tip
+    // Shield Wallet supplies the sender's credits record via recordIndices: [0]
+    // The transition calls credits.aleo/transfer_private internally
+    const result = await this.wallet.executeTransaction({
+      program: PROGRAM_IDS.PRIVATE_TIPS,
+      function: 'send_private_tip',
+      inputs: [recipientAddress, `${amountMicrocredits}u64`, saltField, groupIdField],
+      fee: 50_000,
       privateFee: true,
-      recordIndices: [0],
+      recordIndices: [0],  // sender's credits record — Shield Wallet selects it
     });
 
-    if (!transferResult) throw new Error('Transfer transaction returned no result');
-    console.log('✓ ZK transfer TX (credits.aleo/transfer_private):', transferResult.transactionId);
+    if (!result) throw new Error('send_private_tip returned no result');
+    console.log('✓ ZK tip TX (private_tips.aleo/send_private_tip):', result.transactionId);
+    console.log('  Receipt ID (BHP256 commitment):', receiptId);
 
-    // Step 2: Record on-chain receipt via tip_receipt.aleo (deployed on testnet)
-    // receipt_id is public (BHP256 hash), amount is public, parties are hidden
-    try {
-      const receiptResult = await this.wallet.executeTransaction({
-        program: PROGRAM_IDS.TIP_RECEIPT,
-        function: 'record_tip',
-        inputs: [receiptId, `${amountMicrocredits}u64`, groupIdField],
-        fee: 35_000,
-        privateFee: false,  // record_tip uses public inputs — public fee is fine
-      });
-      if (receiptResult) {
-        console.log('✓ On-chain receipt TX (tip_receipt.aleo/record_tip):', receiptResult.transactionId);
-        return { transactionId: receiptResult.transactionId, receiptId };
-      }
-    } catch (e) {
-      console.warn('Receipt recording failed (tip transfer still succeeded):', e);
-    }
-
-    return { transactionId: transferResult.transactionId, receiptId };
+    return { transactionId: result.transactionId, receiptId };
   }
 
   /**
-   * Compute receipt_id the same way private_tips.aleo does:
+   * Compute receipt_id the same way tip_receipt.aleo does:
    *   BHP256::hash_to_field({ recipient_hash, amount_hash, salt_hash })
    *
    * This is a JS approximation — the real commitment is computed inside the ZK circuit.
    * We use it only to show a consistent identifier in the UI before the TX confirms.
    */
-  private computeReceiptId(recipient: string, amount: number, saltField: string): string {
+  computeReceiptId(recipient: string, amount: number, saltField: string): string {
     const rHash = this.stringToField(`recipient_${recipient}`);
     const aHash = this.stringToField(`amount_${amount}`);
     const sHash = this.stringToField(`salt_${saltField}`);
@@ -340,20 +330,20 @@ export class LeoContractService {
 
   /**
    * Check if tip receipt already exists (replay protection)
-   * Reads: tip_receipt.aleo/tip_receipts  (live blockchain query — contract deployed)
+   * Reads: private_tips.aleo/tip_receipts  (live blockchain query — contract deployed)
    */
   async checkNullifierUsed(nullifier: string): Promise<boolean> {
-    const value = await fetchMapping(PROGRAM_IDS.TIP_RECEIPT, 'tip_receipts', nullifier);
+    const value = await fetchMapping(PROGRAM_IDS.PRIVATE_TIPS, 'tip_receipts', nullifier);
     return value !== null && value !== 'null';
   }
 
   /**
    * Verify a tip receipt on-chain
-   * Reads: tip_receipt.aleo/tip_receipts  (live — TX at17zg5ef... on testnet)
+   * Reads: private_tips.aleo/tip_receipts  (TX at1cr03j... on testnet)
    * Returns the tip amount if the receipt exists, null otherwise
    */
   async verifyTipReceipt(receiptId: string): Promise<number | null> {
-    const value = await fetchMapping(PROGRAM_IDS.TIP_RECEIPT, 'tip_receipts', receiptId);
+    const value = await fetchMapping(PROGRAM_IDS.PRIVATE_TIPS, 'tip_receipts', receiptId);
     if (!value || value === 'null') return null;
     const num = parseInt(value.replace(/[^0-9]/g, ''), 10);
     return isNaN(num) ? null : num;

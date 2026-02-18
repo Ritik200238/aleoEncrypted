@@ -1,0 +1,21 @@
+{
+  "name": "encrypted-social-relay",
+  "version": "1.0.0",
+  "description": "Minimal encrypted message relay server for EncryptedSocial",
+  "main": "server.js",
+  "scripts": {
+    "start": "npx tsx server.ts",
+    "dev": "npx tsx --watch server.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

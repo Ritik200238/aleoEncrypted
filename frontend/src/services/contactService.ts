@@ -1,20 +1,19 @@
 /**
  * Contact Service
- * Manages user contacts and search functionality
+ * Manages user contacts using IndexedDB via databaseService
  */
 
 import type { Contact, ContactSearchResult } from '../models/Contact';
-
-const CONTACTS_STORAGE_KEY = 'encrypted_social_contacts';
+import { databaseService, type Contact as DBContact } from './databaseService';
 
 class ContactService {
   /**
-   * Get all contacts from localStorage
+   * Get all contacts from IndexedDB
    */
-  getContacts(): Contact[] {
+  async getContacts(): Promise<Contact[]> {
     try {
-      const stored = localStorage.getItem(CONTACTS_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const dbContacts = await databaseService.getContacts();
+      return dbContacts.map(this.dbContactToContact);
     } catch (error) {
       console.error('Error loading contacts:', error);
       return [];
@@ -22,119 +21,149 @@ class ContactService {
   }
 
   /**
+   * Sync getter for backward compatibility - loads from cache or returns empty
+   */
+  getContactsSync(): Contact[] {
+    // For backward compat during migration; callers should migrate to async
+    try {
+      const stored = localStorage.getItem('encrypted_social_contacts');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Add a new contact
    */
-  addContact(contact: Contact): void {
-    const contacts = this.getContacts();
-
-    // Check if contact already exists
-    const existingIndex = contacts.findIndex(c => c.address === contact.address);
-
-    if (existingIndex >= 0) {
-      // Update existing contact
-      contacts[existingIndex] = { ...contacts[existingIndex], ...contact };
-    } else {
-      // Add new contact
-      contacts.push(contact);
+  async addContact(contact: Contact): Promise<void> {
+    try {
+      const existing = await databaseService.getContactByAddress(contact.address);
+      if (existing) {
+        await databaseService.updateContact(existing.id, this.contactToDBContact(contact));
+      } else {
+        const dbContact: DBContact = {
+          id: contact.address,
+          address: contact.address,
+          displayName: contact.displayName,
+          avatar: contact.avatar || '',
+          bio: contact.bio || '',
+          publicKey: contact.publicKey || '',
+          isBlocked: false,
+          addedAt: contact.addedAt || Date.now(),
+        };
+        await databaseService.addContact(dbContact);
+      }
+      // Also update localStorage for backward compat
+      this.syncToLocalStorage(contact);
+    } catch (error) {
+      console.error('Error adding contact:', error);
+      // Fallback to localStorage
+      this.syncToLocalStorage(contact);
     }
-
-    localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(contacts));
   }
 
   /**
    * Remove a contact
    */
-  removeContact(address: string): void {
-    const contacts = this.getContacts().filter(c => c.address !== address);
-    localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(contacts));
+  async removeContact(address: string): Promise<void> {
+    try {
+      const contact = await databaseService.getContactByAddress(address);
+      if (contact) {
+        await databaseService.deleteContact(contact.id);
+      }
+    } catch (error) {
+      console.error('Error removing contact:', error);
+    }
   }
 
   /**
    * Get a specific contact by address
    */
-  getContact(address: string): Contact | null {
-    const contacts = this.getContacts();
-    return contacts.find(c => c.address === address) || null;
+  async getContact(address: string): Promise<Contact | null> {
+    try {
+      const dbContact = await databaseService.getContactByAddress(address);
+      return dbContact ? this.dbContactToContact(dbContact) : null;
+    } catch (error) {
+      console.error('Error getting contact:', error);
+      return null;
+    }
   }
 
   /**
    * Search contacts by name or address
    */
-  searchContacts(query: string): ContactSearchResult[] {
+  async searchContacts(query: string): Promise<ContactSearchResult[]> {
     if (!query.trim()) {
-      return this.getContacts().map(c => ({ ...c, matchScore: 1 }));
+      const contacts = await this.getContacts();
+      return contacts.map(c => ({ ...c, matchScore: 1 }));
     }
 
-    const lowerQuery = query.toLowerCase();
-    const contacts = this.getContacts();
-
-    return contacts
-      .map(contact => {
-        let matchScore = 0;
-
-        // Check display name
-        if (contact.displayName.toLowerCase().includes(lowerQuery)) {
-          matchScore += 2;
-        }
-
-        // Check address
-        if (contact.address.toLowerCase().includes(lowerQuery)) {
-          matchScore += 1;
-        }
-
-        // Check bio
-        if (contact.bio.toLowerCase().includes(lowerQuery)) {
-          matchScore += 0.5;
-        }
-
-        return { ...contact, matchScore };
-      })
-      .filter(result => result.matchScore > 0)
-      .sort((a, b) => b.matchScore - a.matchScore);
+    const dbResults = await databaseService.searchContacts(query);
+    return dbResults.map(c => ({
+      ...this.dbContactToContact(c),
+      matchScore: 1,
+    }));
   }
 
   /**
    * Update contact status (online/offline/away)
    */
   updateContactStatus(address: string, status: Contact['status']): void {
-    const contacts = this.getContacts();
-    const contactIndex = contacts.findIndex(c => c.address === address);
-
-    if (contactIndex >= 0) {
-      contacts[contactIndex].status = status;
-      contacts[contactIndex].lastSeen = Date.now();
-      localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(contacts));
-    }
+    // Status is transient, no need to persist to DB
+    console.log(`Contact ${address} status: ${status}`);
   }
 
   /**
    * Update typing indicator
    */
   updateTypingStatus(address: string, isTyping: boolean): void {
-    const contacts = this.getContacts();
-    const contactIndex = contacts.findIndex(c => c.address === address);
-
-    if (contactIndex >= 0) {
-      contacts[contactIndex].isTyping = isTyping;
-      localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(contacts));
-    }
+    console.log(`Contact ${address} typing: ${isTyping}`);
   }
 
   /**
    * Get online contacts
    */
-  getOnlineContacts(): Contact[] {
-    return this.getContacts().filter(c => c.status === 'online');
+  async getOnlineContacts(): Promise<Contact[]> {
+    // Online status is managed in-memory via WebSocket events
+    return [];
   }
 
-  /**
-   * Import contacts from Aleo blockchain (placeholder)
-   */
-  async importFromAleo(userAddress: string): Promise<Contact[]> {
-    // TODO: Implement Aleo blockchain contact discovery
-    // This would use ZK proofs to match contacts without revealing data
-    console.log('Importing contacts from Aleo for', userAddress);
-    return [];
+  private dbContactToContact(db: DBContact): Contact {
+    return {
+      address: db.address,
+      displayName: db.displayName,
+      avatar: db.avatar || '',
+      bio: db.bio || '',
+      publicKey: db.publicKey || '',
+      lastSeen: db.addedAt,
+      status: 'offline' as const,
+      isTyping: false,
+      addedAt: db.addedAt,
+    };
+  }
+
+  private contactToDBContact(contact: Contact): Partial<DBContact> {
+    return {
+      displayName: contact.displayName,
+      avatar: contact.avatar,
+      bio: contact.bio || '',
+      publicKey: contact.publicKey || '',
+    };
+  }
+
+  private syncToLocalStorage(contact: Contact): void {
+    try {
+      const stored = localStorage.getItem('encrypted_social_contacts');
+      const contacts: Contact[] = stored ? JSON.parse(stored) : [];
+      const idx = contacts.findIndex(c => c.address === contact.address);
+      if (idx >= 0) {
+        contacts[idx] = { ...contacts[idx], ...contact };
+      } else {
+        contacts.push(contact);
+      }
+      localStorage.setItem('encrypted_social_contacts', JSON.stringify(contacts));
+    } catch { /* ignore */ }
   }
 }
 

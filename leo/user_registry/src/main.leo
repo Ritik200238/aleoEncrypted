@@ -1,4 +1,4 @@
-// Encrypted Social Network - User Registry (Leo 3.4 Compatible)
+// Encrypted Social Network - User Registry (Leo 2.3.0 Compatible)
 // Manages user profiles with privacy-preserving handle registration
 
 program user_registry.aleo {
@@ -16,8 +16,8 @@ program user_registry.aleo {
 
     // ========== MAPPINGS ==========
 
-    // Maps handle hash to owner address (for uniqueness and lookups)
-    mapping handles: field => address;
+    // Maps handle hash to profile commitment (for uniqueness check)
+    mapping handles: field => field;
 
     // Maps user address to their profile commitment (for verification)
     mapping profile_commitments: address => field;
@@ -28,50 +28,43 @@ program user_registry.aleo {
     // ========== TRANSITIONS ==========
 
     // Register a new user profile
-    // Note: Handle must be unique, encrypted_profile contains user data
-    transition register_profile(
-        public handle: field,              // Hash of unique @username
-        public encrypted_profile: field,   // Encrypted profile data
-        public profile_commitment: field,  // Commitment for data integrity
-    ) -> ProfileRecord {
+    // Handle must be unique, encrypted_profile contains user data
+    async transition register_profile(
+        public handle: field,
+        public encrypted_profile: field,
+        public profile_commitment: field,
+    ) -> (ProfileRecord, Future) {
         // Create the profile record
         let profile: ProfileRecord = ProfileRecord {
             owner: self.caller,
             handle: handle,
             encrypted_profile: encrypted_profile,
             profile_commitment: profile_commitment,
-            timestamp: 0u64,  // Will be set on-chain
+            timestamp: 0u64,
         };
 
-        return profile then finalize(handle, self.caller, profile_commitment);
+        return (profile, finalize_register_profile(handle, profile_commitment));
     }
 
     // Finalize registration - store handle and commitment mappings
-    finalize register_profile(
+    async function finalize_register_profile(
         handle: field,
-        owner: address,
         commitment: field,
     ) {
-        // Ensure handle is not already taken
-        let existing_owner: address = Mapping::get_or_use(handles, handle, 0addr);
-        assert_eq(existing_owner, 0addr);
+        // Ensure handle is not already taken (0field means not registered)
+        let existing: field = handles.get_or_use(handle, 0field);
+        assert_eq(existing, 0field);
 
-        // Store handle -> owner mapping
-        Mapping::set(handles, handle, owner);
-
-        // Store owner -> commitment mapping
-        Mapping::set(profile_commitments, owner, commitment);
-
-        // Store registration timestamp
-        Mapping::set(registration_times, owner, block.height);
+        // Store handle -> commitment mapping (non-zero means taken)
+        handles.set(handle, commitment);
     }
 
     // Update user profile (preserves handle, updates encrypted data)
-    transition update_profile(
-        profile_record: ProfileRecord,      // Existing profile
-        public new_encrypted_data: field,   // New encrypted profile data
-        public new_commitment: field,       // New commitment
-    ) -> ProfileRecord {
+    async transition update_profile(
+        profile_record: ProfileRecord,
+        public new_encrypted_data: field,
+        public new_commitment: field,
+    ) -> (ProfileRecord, Future) {
         // Verify ownership
         assert_eq(profile_record.owner, self.caller);
 
@@ -81,81 +74,36 @@ program user_registry.aleo {
             handle: profile_record.handle,
             encrypted_profile: new_encrypted_data,
             profile_commitment: new_commitment,
-            timestamp: 0u64,  // Will be updated on-chain
+            timestamp: 0u64,
         };
 
-        return updated_profile then finalize(self.caller, new_commitment);
+        return (updated_profile, finalize_update_profile(profile_record.handle, new_commitment));
     }
 
     // Finalize profile update
-    finalize update_profile(
-        owner: address,
+    async function finalize_update_profile(
+        handle: field,
         new_commitment: field,
     ) {
-        // Update commitment mapping
-        Mapping::set(profile_commitments, owner, new_commitment);
+        // Update handle -> commitment mapping
+        handles.set(handle, new_commitment);
     }
 
-    // Lookup user address by handle hash
-    transition lookup_handle(
+    // Verify profile commitment matches stored value
+    // Asserts on-chain, will fail if commitment doesn't match
+    async transition verify_profile(
         public handle: field,
-    ) -> address {
-        return 0addr then finalize(handle);
-    }
-
-    // Finalize handle lookup
-    finalize lookup_handle(
-        handle: field,
-    ) -> address {
-        let owner: address = Mapping::get_or_use(handles, handle, 0addr);
-        return owner;
-    }
-
-    // Verify profile commitment for a user
-    transition verify_profile(
-        public user_address: address,
         public expected_commitment: field,
-    ) -> bool {
-        return false then finalize(user_address, expected_commitment);
+    ) -> Future {
+        return finalize_verify_profile(handle, expected_commitment);
     }
 
-    // Finalize profile verification
-    finalize verify_profile(
-        user_address: address,
-        expected_commitment: field,
-    ) -> bool {
-        let stored_commitment: field = Mapping::get(profile_commitments, user_address);
-        return stored_commitment == expected_commitment;
-    }
-
-    // Get profile metadata (for existence check)
-    transition profile_exists(
-        public user_address: address,
-    ) -> bool {
-        return false then finalize(user_address);
-    }
-
-    // Finalize profile existence check
-    finalize profile_exists(
-        user_address: address,
-    ) -> bool {
-        let commitment: field = Mapping::get_or_use(profile_commitments, user_address, 0field);
-        return commitment != 0field;
-    }
-
-    // Check if handle is available
-    transition handle_available(
-        public handle: field,
-    ) -> bool {
-        return true then finalize(handle);
-    }
-
-    // Finalize handle availability check
-    finalize handle_available(
+    async function finalize_verify_profile(
         handle: field,
-    ) -> bool {
-        let owner: address = Mapping::get_or_use(handles, handle, 0addr);
-        return owner == 0addr;
+        expected_commitment: field,
+    ) {
+        let stored: field = handles.get(handle);
+        assert_eq(stored, expected_commitment);
     }
 
     // Health check / version info

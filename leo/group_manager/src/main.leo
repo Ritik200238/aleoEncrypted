@@ -48,4 +48,9 @@ program group_manager.aleo {
     transition get_member_count(public group_id: field) -> u32 {
         return 1u32;
     }
+
+    // Constructor required for deployment on latest consensus
+    @noupgrade
+    async constructor() {
+    }
 }

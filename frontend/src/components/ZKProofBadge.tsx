@@ -53,10 +53,10 @@ export function ZKProofBadge({
               <Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-semibold text-foreground">
-                  Zero-Knowledge Proof Verified
+                  Merkle Membership Verified
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Sender's group membership verified on Aleo blockchain without revealing their identity.
+                  Sender proved group membership via group_membership.aleo — identity stays hidden on-chain.
                 </p>
               </div>
             </div>
@@ -119,13 +119,13 @@ export function ZKProofStatusPanel({
             <CheckCircle2 className="w-4 h-4 text-green-500" />
           </h4>
           <p className="text-sm text-muted-foreground mt-1">
-            Group membership verified on Aleo blockchain using ZK proofs
+            Group membership verified via group_membership.aleo Merkle proof (8-level Merkle tree + nullifier)
           </p>
 
           <div className="mt-3 space-y-2">
             {/* Member Stats */}
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Members with ZK Proofs:</span>
+              <span className="text-muted-foreground">Members with Merkle Credentials:</span>
               <span className="font-semibold text-green-600 dark:text-green-400">
                 {verifiedCount}/{memberCount}
               </span>

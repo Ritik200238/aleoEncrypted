@@ -13,10 +13,12 @@ import { messagingOrchestrator, type PrivacyMetrics } from '../services/messagin
 interface PrivacyScoreDashboardProps {
   theme: Record<string, string>;
   onClose?: () => void;
+  isOpen?: boolean;
+  userAddress?: string;
 }
 
 function calculateScore(metrics: PrivacyMetrics): number {
-  if (metrics.totalMessages === 0 && metrics.zkTipCount === 0) return 0;
+  if (metrics.totalMessages === 0 && metrics.zkTipCount === 0 && (metrics.anonymousMessages ?? 0) === 0) return 0;
 
   const encRate = metrics.totalMessages > 0
     ? metrics.encryptedMessages / metrics.totalMessages
@@ -25,11 +27,13 @@ function calculateScore(metrics: PrivacyMetrics): number {
     ? metrics.onChainMessages / metrics.totalMessages
     : 0;
   const hasGroups = metrics.totalGroups > 0 ? 1 : 0;
-  // ZK tips are real Aleo ZK-SNARK usage — bonus up to 15 points
+  // ZK tips are real Aleo ZK-SNARK usage — bonus up to 10 points
   const zkTipBonus = Math.min(1, metrics.zkTipCount / 3);
+  // Anonymous messages with Merkle ZK proofs — bonus up to 5 points
+  const anonBonus = Math.min(1, (metrics.anonymousMessages ?? 0) / 2);
 
-  // Weighted score: encryption (35%), on-chain (30%), groups (20%), ZK tips (15%)
-  const score = encRate * 35 + chainRate * 30 + hasGroups * 20 + zkTipBonus * 15;
+  // Weighted score: encryption (30%), on-chain (25%), groups (20%), ZK tips (10%), anon msgs (5%)
+  const score = encRate * 30 + chainRate * 25 + hasGroups * 20 + zkTipBonus * 10 + anonBonus * 5 + 10; // +10 base for having any activity
   return Math.min(100, Math.round(score));
 }
 
@@ -77,7 +81,7 @@ function MetricCard({
   return (
     <div
       className="rounded-xl p-3 flex flex-col gap-1"
-      style={{ background: theme.inputBg, border: `1px solid ${theme.border}` }}
+      style={{ background: theme.cardBg || theme.input, border: `1px solid ${theme.border}` }}
     >
       <div className="flex items-center gap-2">
         <span style={{ color }}>{icon}</span>
@@ -93,7 +97,8 @@ function MetricCard({
   );
 }
 
-export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardProps) {
+export function PrivacyScoreDashboard({ theme, onClose, isOpen = true }: PrivacyScoreDashboardProps) {
+  // Hooks MUST be called before any conditional return (Rules of Hooks)
   const [metrics, setMetrics] = useState<PrivacyMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -112,10 +117,13 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
   }, []);
 
   useEffect(() => {
+    if (!isOpen) return;
     refresh();
     const interval = setInterval(refresh, 30_000); // auto-refresh every 30s
     return () => clearInterval(interval);
-  }, [refresh]);
+  }, [refresh, isOpen]);
+
+  if (!isOpen) return null;
 
   const score = metrics ? calculateScore(metrics) : 0;
   const scoreColor = score >= 80 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444';
@@ -147,7 +155,7 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
             onClick={refresh}
             disabled={loading}
             className="p-1.5 rounded-lg transition-opacity"
-            style={{ background: theme.inputBg, color: theme.textSecondary }}
+            style={{ background: theme.cardBg || theme.input, color: theme.textSecondary }}
             title="Refresh metrics"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -156,7 +164,7 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg"
-              style={{ background: theme.inputBg, color: theme.textSecondary }}
+              style={{ background: theme.cardBg || theme.input, color: theme.textSecondary }}
             >
               ✕
             </button>
@@ -179,15 +187,16 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
         </div>
 
         {/* Score breakdown bar */}
-        <div className="rounded-xl p-3" style={{ background: theme.inputBg, border: `1px solid ${theme.border}` }}>
+        <div className="rounded-xl p-3" style={{ background: theme.cardBg || theme.input, border: `1px solid ${theme.border}` }}>
           <div style={{ fontSize: 11, color: theme.textSecondary, fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Score Breakdown
           </div>
           {[
-            { label: 'E2E Encryption (AES-256-GCM)', value: encRate, weight: 35, color: '#6366f1' },
-            { label: 'On-Chain Records', value: chainRate, weight: 30, color: '#22c55e' },
+            { label: 'E2E Encryption (AES-256-GCM)', value: encRate, weight: 30, color: '#6366f1' },
+            { label: 'On-Chain Records', value: chainRate, weight: 25, color: '#22c55e' },
             { label: 'Groups on Aleo', value: metrics ? (metrics.totalGroups > 0 ? 100 : 0) : 0, weight: 20, color: '#f59e0b' },
-            { label: 'ZK Tips (transfer_private)', value: metrics ? Math.min(100, (metrics.zkTipCount / 3) * 100) : 0, weight: 15, color: '#06b6d4' },
+            { label: 'ZK Tips (private_tips.aleo)', value: metrics ? Math.min(100, (metrics.zkTipCount / 3) * 100) : 0, weight: 10, color: '#06b6d4' },
+            { label: 'Anon Msgs (Merkle ZK)', value: metrics ? Math.min(100, ((metrics.anonymousMessages ?? 0) / 2) * 100) : 0, weight: 5, color: '#a855f7' },
           ].map(item => (
             <div key={item.label} className="mb-3 last:mb-0">
               <div className="flex justify-between items-center mb-1">
@@ -236,8 +245,16 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
             icon={<Zap size={14} />}
             label="ZK Tips Sent"
             value={`${metrics?.zkTipCount ?? 0}`}
-            subValue="via transfer_private"
+            subValue="via private_tips.aleo"
             color="#06b6d4"
+            theme={theme}
+          />
+          <MetricCard
+            icon={<Shield size={14} />}
+            label="Anonymous ZK"
+            value={`${metrics?.anonymousMessages ?? 0}`}
+            subValue="Merkle proofs on-chain"
+            color="#a855f7"
             theme={theme}
           />
         </div>
@@ -246,7 +263,7 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.border}` }}>
           <div
             className="px-3 py-2"
-            style={{ background: theme.inputBg, borderBottom: `1px solid ${theme.border}` }}
+            style={{ background: theme.cardBg || theme.input, borderBottom: `1px solid ${theme.border}` }}
           >
             <span style={{ fontSize: 11, color: theme.textSecondary, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Recent Blockchain Transactions
@@ -273,6 +290,16 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
                       </div>
                       <div style={{ fontSize: 10, color: theme.textSecondary }}>
                         {tx.type} · {tx.status}
+                        {tx.receiptId && (
+                          <span style={{ color: '#06b6d4', marginLeft: 4 }}>
+                            · receipt: {tx.receiptId.slice(0, 8)}...
+                          </span>
+                        )}
+                        {tx.nullifier && (
+                          <span style={{ color: '#a855f7', marginLeft: 4 }}>
+                            · nullifier: {tx.nullifier.slice(0, 10)}...
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -303,9 +330,10 @@ export function PrivacyScoreDashboard({ theme, onClose }: PrivacyScoreDashboardP
               Zero-Knowledge Privacy
             </div>
             <div style={{ fontSize: 11, color: theme.textSecondary, lineHeight: 1.5 }}>
-              Messages are encrypted with AES-256-GCM before leaving your device — the relay never sees plaintext.
-              Private tips use Aleo's native <code style={{ color: '#6366f1' }}>transfer_private</code> (ZK-SNARK),
-              hiding your identity and balance on-chain. Group records are stored on Aleo Testnet.
+              Messages use AES-256-GCM — encrypted before leaving your device, relay sees only ciphertext.
+              Tips use <code style={{ color: '#6366f1' }}>private_tips.aleo</code> → <code style={{ color: '#6366f1' }}>transfer_private</code> (Aleo Groth16 SNARK):
+              sender identity + balance hidden on-chain, BHP256 receipt verifiable on Aleo Explorer.
+              Groups use <code style={{ color: '#6366f1' }}>group_membership.aleo</code> Merkle proofs.
             </div>
           </div>
         </div>

@@ -37,7 +37,7 @@ program message_handler.aleo {
             owner: sender_addr,
             group_id: group_id,
             encrypted_content: encrypted_content,
-            sender_commitment: group_id,  // Simplified commitment
+            sender_commitment: BHP256::hash_to_field(sender_addr),  // hash of sender — never the group_id
             timestamp: 0u64,
             message_id: message_id,
         };
@@ -49,4 +49,5 @@ program message_handler.aleo {
     transition get_version() -> u32 {
         return 1u32;
     }
+
 }

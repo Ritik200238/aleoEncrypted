@@ -28,4 +28,10 @@ program membership_proof.aleo {
     transition get_version() -> u32 {
         return 1u32;
     }
+
+    // Constructor required for deployment on latest consensus
+    @noupgrade
+    async constructor() {
+        // No-op constructor - program is non-upgradable
+    }
 }

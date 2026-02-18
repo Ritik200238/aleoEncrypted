@@ -37,6 +37,8 @@ export interface OrchestratorMessage {
   blockchainTxId?: string;
   explorerUrl?: string;
   isAnonymous?: boolean;
+  nullifier?: string;         // on-chain nullifier from group_membership.aleo
+  nullifierTxId?: string;     // TX that stored the nullifier
 }
 
 export interface OrchestratorChat {
@@ -73,7 +75,8 @@ export interface PrivacyMetrics {
   totalGroups: number;
   confirmedTxCount: number;
   zkTipCount: number;
-  recentTransactions: Array<{ id: string; type: string; url: string; status: string }>;
+  anonymousMessages: number;
+  recentTransactions: Array<{ id: string; type: string; url: string; status: string; receiptId?: string; nullifier?: string }>;
 }
 
 // ─── Adapters: bridge between DB types and UI types ─────────────────────────
@@ -131,7 +134,10 @@ class MessagingOrchestrator {
   private userAddress: string = '';
   private messageListeners: Array<(msg: OrchestratorMessage) => void> = [];
   private statusListeners: Array<(msgId: string, status: OrchestratorMessage['status'], txId?: string) => void> = [];
-  private zkTipTxs: Array<{ id: string; url: string; timestamp: number }> = [];
+  private typingListeners: Array<(chatId: string, userId: string, isTyping: boolean) => void> = [];
+  private nullifierListeners: Array<(data: { msgId: string; nullifier: string; txId: string }) => void> = [];
+  private zkTipTxs: Array<{ id: string; url: string; timestamp: number; receiptId?: string }> = [];
+  private anonymousMsgTxs: Array<{ id: string; url: string; nullifier: string; timestamp: number }> = [];
 
   /**
    * Initialize with user's wallet address. Call once after wallet connects.
@@ -154,6 +160,14 @@ class MessagingOrchestrator {
     websocketService.disconnect();
     this.messageListeners = [];
     this.statusListeners = [];
+    this.typingListeners = [];
+    this.nullifierListeners = [];
+    this.anonymousMsgTxs = [];
+  }
+
+  /** Alias for destroy() — for useEffect cleanup */
+  disconnect(): void {
+    this.destroy();
   }
 
   // ─── Data Loaders ──────────────────────────────────────────────────────────
@@ -226,8 +240,12 @@ class MessagingOrchestrator {
       lastMessageTime: now,
     });
 
-    // 5. Submit to blockchain (async, non-blocking)
-    this.submitToBlockchain(msgId, chatId, ciphertext, now);
+    // 5. For anonymous group messages: submit ZK membership proof (non-blocking)
+    if (isAnonymous) {
+      this.submitAnonymousMembership(msgId, chatId, content, now);
+    } else {
+      this.submitToBlockchain(msgId, chatId, ciphertext, now);
+    }
 
     // 6. Relay via WebSocket (async, non-blocking)
     this.relayMessage(chatId, msgId, ciphertext, nonce, sender, now, isAnonymous);
@@ -263,6 +281,52 @@ class MessagingOrchestrator {
     }
   }
 
+  /**
+   * Submit ZK membership proof for anonymous group messages.
+   * Calls group_membership.aleo/submit_feedback → stores nullifier on-chain.
+   * The nullifier is the only on-chain evidence the message was sent — no identity leaks.
+   */
+  private async submitAnonymousMembership(
+    msgId: string,
+    chatId: string,
+    content: string,
+    _now: number
+  ): Promise<void> {
+    try {
+      const contentHash = Array.from(new TextEncoder().encode(content.slice(0, 64)))
+        .reduce((h, b) => ((h << 5) - h + b) & 0xffffffff, 0)
+        .toString();
+
+      const result = await leoContractService.submitAnonymousFeedback(chatId, contentHash, msgId);
+
+      // Update message record with the on-chain nullifier
+      await databaseService.updateMessage(msgId, {
+        blockchainTxId: result.transactionId,
+        status: 'delivered',
+      });
+      this.notifyStatus(msgId, 'delivered', result.transactionId);
+
+      // Track anonymous message TX for Privacy Score Dashboard
+      this.anonymousMsgTxs.push({
+        id: result.transactionId,
+        url: getTransactionExplorerUrl(result.transactionId),
+        nullifier: result.nullifier,
+        timestamp: Date.now(),
+      });
+
+      // Fire listeners with nullifier so UI can display it
+      const nullifierMsg = { msgId, nullifier: result.nullifier, txId: result.transactionId };
+      this.nullifierListeners.forEach(fn => fn(nullifierMsg));
+
+      console.log(`✓ Nullifier on-chain: ${result.nullifier}`);
+      console.log(`  TX: ${result.transactionId}`);
+    } catch (err) {
+      // Wallet not available or no credential — still mark sent locally
+      console.warn('Anonymous membership proof skipped (wallet/credential unavailable):', err);
+      this.notifyStatus(msgId, 'sent');
+    }
+  }
+
   private relayMessage(
     chatId: string,
     msgId: string,
@@ -288,7 +352,7 @@ class MessagingOrchestrator {
 
   // ─── Group Creation ─────────────────────────────────────────────────────────
 
-  async createGroup(name: string, memberAddresses: string[]): Promise<OrchestratorChat> {
+  async createGroup(name: string, memberAddresses: string[]): Promise<{ chat: OrchestratorChat; txId?: string }> {
     const allMembers = [this.userAddress, ...memberAddresses.filter(a => a !== this.userAddress)];
     const chatId = `group_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const now = Date.now();
@@ -319,14 +383,22 @@ class MessagingOrchestrator {
       status: 'delivered',
     });
 
-    // On-chain group creation (non-blocking)
-    leoContractService.createGroup(name).then(result => {
-      databaseService.updateChat(chatId, { merkleRoot: result.merkleRoot });
-      console.log(`✓ Group on-chain: ${result.transactionId}`);
-    }).catch(err => console.warn('Group on-chain failed:', err));
+    // On-chain group creation (non-blocking — we still return the chat immediately)
+    let onChainTxId: string | undefined;
+    try {
+      const result = await Promise.race([
+        leoContractService.createGroup(name),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ]);
+      await databaseService.updateChat(chatId, { merkleRoot: (result as any).merkleRoot });
+      onChainTxId = (result as any).transactionId;
+      console.log(`✓ Group on-chain: ${onChainTxId}`);
+    } catch (err) {
+      console.warn('Group on-chain skipped (no wallet or timeout):', err);
+    }
 
     websocketService.joinGroup(chatId);
-    return adaptDbChat(dbChat);
+    return { chat: adaptDbChat(dbChat), txId: onChainTxId };
   }
 
   // ─── Contact Management ─────────────────────────────────────────────────────
@@ -385,11 +457,12 @@ class MessagingOrchestrator {
 
   // ─── ZK Tip Tracking ────────────────────────────────────────────────────────
 
-  recordZkTip(transactionId: string): void {
+  recordZkTip(transactionId: string, receiptId?: string): void {
     this.zkTipTxs.push({
       id: transactionId,
       url: getTransactionExplorerUrl(transactionId),
       timestamp: Date.now(),
+      receiptId,
     });
   }
 
@@ -415,22 +488,32 @@ class MessagingOrchestrator {
       status: 'confirmed',
     }));
 
-    // Mix in ZK tip TXs to the recent transactions list (shown as 'ZK transfer_private')
-    const tipTxs = this.zkTipTxs.slice(-5).map(t => ({
+    // Mix in ZK tip TXs (tip_receipt.aleo) and anonymous membership TXs (group_membership.aleo)
+    const tipTxs = this.zkTipTxs.slice(-3).map(t => ({
       id: t.id,
-      type: 'ZK transfer_private',
+      type: 'private_tips.aleo/send_private_tip',
       url: t.url,
       status: 'confirmed',
+      receiptId: t.receiptId,
+    }));
+
+    const anonTxs = this.anonymousMsgTxs.slice(-3).map(a => ({
+      id: a.id,
+      type: 'group_membership.aleo/submit_feedback',
+      url: a.url,
+      status: 'confirmed',
+      nullifier: a.nullifier,
     }));
 
     return {
       totalMessages: allMsgs.length,
       encryptedMessages: encryptedMsgs.length,
-      onChainMessages: onChainMsgs.length,
+      onChainMessages: onChainMsgs.length + this.anonymousMsgTxs.length,
       totalGroups: groups.length,
-      confirmedTxCount: onChainMsgs.length + this.zkTipTxs.length,
+      confirmedTxCount: onChainMsgs.length + this.zkTipTxs.length + this.anonymousMsgTxs.length,
       zkTipCount: this.zkTipTxs.length,
-      recentTransactions: [...tipTxs, ...recentTxs].slice(0, 5),
+      anonymousMessages: this.anonymousMsgTxs.length,
+      recentTransactions: [...anonTxs, ...tipTxs, ...recentTxs].slice(0, 5),
     };
   }
 
@@ -449,6 +532,35 @@ class MessagingOrchestrator {
     this.statusListeners.push(callback);
     return () => {
       this.statusListeners = this.statusListeners.filter(l => l !== callback);
+    };
+  }
+
+  /** Alias so CleanTelegramApp can call onStatusUpdate() */
+  onStatusUpdate(
+    callback: (msgId: string, status: OrchestratorMessage['status'], txId?: string) => void
+  ): () => void {
+    return this.onStatusChange(callback);
+  }
+
+  /** Typing indicator subscription */
+  onTyping(callback: (chatId: string, userId: string, isTyping: boolean) => void): () => void {
+    this.typingListeners.push(callback);
+    return () => {
+      this.typingListeners = this.typingListeners.filter(l => l !== callback);
+    };
+  }
+
+  /**
+   * Subscribe to nullifier confirmations from group_membership.aleo.
+   * Fires when an anonymous message's ZK proof is confirmed on-chain.
+   * Use this to display "nullifier: 0x4f3a... [Verify on Explorer →]" in the UI.
+   */
+  onNullifier(
+    callback: (data: { msgId: string; nullifier: string; txId: string }) => void
+  ): () => void {
+    this.nullifierListeners.push(callback);
+    return () => {
+      this.nullifierListeners = this.nullifierListeners.filter(l => l !== callback);
     };
   }
 

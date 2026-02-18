@@ -55,9 +55,9 @@ class AleoWalletService {
 
   // Program addresses on Aleo Testnet (to be updated after deployment)
   private readonly PROGRAM_IDS = {
-    GROUP_MANAGER: 'group_manager_v1.aleo',
-    MEMBERSHIP_PROOF: 'membership_proof_v1.aleo',
-    MESSAGE_HANDLER: 'message_handler_v1.aleo',
+    GROUP_MANAGER: 'group_manager.aleo',
+    MEMBERSHIP_PROOF: 'membership_proof.aleo',
+    MESSAGE_HANDLER: 'message_handler.aleo',
   };
 
   constructor() {
