@@ -18,7 +18,7 @@ import { io, type Socket } from 'socket.io-client';
 // WebSocket configuration
 // Priority: VITE_WS_URL env var → Railway deployment URL → localhost fallback
 const WS_CONFIG = {
-  url: import.meta.env.VITE_WS_URL || (import.meta.env.PROD ? 'wss://encrypted-social-relay.up.railway.app' : 'ws://localhost:3001'),
+  url: import.meta.env.VITE_WS_URL || (import.meta.env.PROD ? 'wss://encrypted-social-relay-production.up.railway.app' : 'ws://localhost:3001'),
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
   reconnectionDelayMax: 10000,
