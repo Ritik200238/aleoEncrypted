@@ -219,28 +219,31 @@ We believe in honest documentation. Here is an unambiguous breakdown:
 | `message_handler.aleo` mapping queries | Same: `group_message_counts` never incremented. Records work; mapping queries return null. |
 | Voice/video calls | UI demo only — no WebRTC signaling. Cosmetic feature. |
 | Read receipts | UI-only timeout — no real delivery acknowledgment protocol. |
-| Client nullifier display | Currently approximated client-side (polynomial hash). Real BHP256 nullifiers will show once `group_membership.aleo` is deployed. |
+| Client nullifier display | Approximated client-side using a polynomial hash (not BHP256). The actual nullifier stored on-chain is computed by the Leo ZK circuit inside `group_membership.aleo/submit_feedback`. Query the on-chain mapping to see the real nullifier. |
 
 **All 6 contracts are now deployed on testnet.** `group_membership.aleo` — the flagship ZK contract with 8-level Merkle membership proofs and nullifier anti-replay — is live at TX `at1ksfdjkpvsrvuqnp6zurgp9feqycjkqkths9pa5gmemxzaryl8s8q3stazt`.
 
 ---
 
-## 10. Deploy Instructions
+## 10. Run Instructions
+
+All 6 contracts are already deployed on Aleo testnet. No further deployment needed.
 
 ```bash
-# tip_receipt.aleo — ALREADY DEPLOYED
-# TX: at17zg5efd6lqv33jtshcf9gfdqtcapycscak8ej3ydexqtkw57fqqsjqmyfr
-
-# Deploy group_membership.aleo (pending — contract written, needs testnet credits)
-leo deploy --path leo/group_membership \
-  --private-key APrivateKey1zkp... \
-  --network testnet
-
 # Start relay server
-cd backend && npm start
+cd backend && npm install && npm start
 
-# Start frontend
-cd frontend && npx vite --port 5173
+# Start frontend (separate terminal)
+cd frontend && npm install --legacy-peer-deps && npm run dev
 ```
 
-After deployment, update `ALEO_CONFIG.programIds.privateTips` and `groupMembership` in `frontend/src/config/aleoConfig.ts` with the confirmed contract names.
+**Deployed contract addresses** are already configured in `frontend/src/config/aleoConfig.ts` and `frontend/src/services/leoContractService.ts`.
+
+To deploy your own copy of a contract:
+```bash
+leo deploy --path leo/private_tips \
+  --private-key APrivateKey1zkp... \
+  --network testnet
+```
+
+See [DEPLOY.md](DEPLOY.md) for the full deployment guide.
