@@ -171,22 +171,24 @@ function App() {
 
   const handleShieldConnect = async () => {
     setWalletError(null);
-    if (!shieldInstalled) {
-      window.open('https://shield.provable.com', '_blank');
-      return;
-    }
+    // Check window.shield directly — adapter detection can lag on first render
+    const shieldPresent = shieldInstalled || !!(window as Record<string, unknown>).shield;
     try {
-      // MUST select wallet before calling connect
-      selectWallet(SHIELD_WALLET_NAME as ReturnType<typeof selectWallet extends (name: infer N) => void ? (name: infer N) => N : never>);
+      // selectWallet MUST be called before connect()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      selectWallet(SHIELD_WALLET_NAME as any);
       await connect(Network.TESTNET);
       setShowWalletModal(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('Shield Wallet connect error:', err);
-      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancelled')) {
+      if (!shieldPresent) {
+        // Extension genuinely not installed
+        window.open('https://shield.provable.com', '_blank');
+      } else if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
         setWalletError('Connection cancelled.');
       } else {
-        setWalletError('Could not connect to Shield Wallet. Make sure the extension is unlocked.');
+        setWalletError('Could not connect. Make sure Shield Wallet is unlocked and try again.');
       }
     }
   };
