@@ -6,8 +6,8 @@
 
 > Prove group membership with a Merkle ZK proof. Send anonymous messages and private ZK tips without revealing your identity on-chain. Built on Aleo.
 
-**Live Demo:** https://aleo-encrypted.vercel.app
-**Demo (no wallet):** https://aleo-encrypted.vercel.app/?demo=true
+**Live Demo:** https://encrypted-social-aleo.vercel.app
+**Demo (no wallet):** https://encrypted-social-aleo.vercel.app/?demo=true
 **Full submission:** [SUBMISSION.md](SUBMISSION.md)
 
 ---

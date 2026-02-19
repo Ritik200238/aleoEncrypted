@@ -12,8 +12,8 @@
 Anonymous group protocol — prove Merkle membership without revealing identity, send private ZK tips with on-chain receipts, all inside a Telegram-style messenger. Built on Aleo.
 
 ### Live Demo
-🌐 **[Live App](https://aleo-encrypted.vercel.app)**
-> No wallet? Use demo mode: [aleo-encrypted.vercel.app/?demo=true](https://aleo-encrypted.vercel.app/?demo=true)
+🌐 **[Live App](https://encrypted-social-aleo.vercel.app)**
+> No wallet? Use demo mode: [encrypted-social-aleo.vercel.app/?demo=true](https://encrypted-social-aleo.vercel.app/?demo=true)
 
 ### GitHub
 🔗 https://github.com/Ritik200238/aleoEncrypted
@@ -147,7 +147,7 @@ NullPay is a focused payment tool. EncryptedSocial is a full anonymous social pl
 ## 7. Judge Verification Guide (2 Minutes)
 
 ### Step 1 — See the app
-Open [demo mode](https://aleo-encrypted.vercel.app/?demo=true). No wallet needed.
+Open [demo mode](https://encrypted-social-aleo.vercel.app/?demo=true). No wallet needed.
 
 ### Step 2 — Read the ZK circuits on-chain (no wallet needed)
 
