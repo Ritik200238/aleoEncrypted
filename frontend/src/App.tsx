@@ -195,8 +195,11 @@ function App() {
 
   const handleLeoConnect = async () => {
     setWalletError(null);
-    const leo = (window as Record<string, unknown>).leoWallet as {
-      connect?: (network: string) => Promise<{ address?: string }>;
+    // Leo wallet injects as window.leoWallet or window.leo
+    const win = window as Record<string, unknown>;
+    const leo = (win.leoWallet || win.leo) as {
+      // Correct Leo wallet API: connect(decryptPermission, network, programs?)
+      connect: (decryptPermission: string, network: string, programs?: string[]) => Promise<void>;
       publicKey?: string;
     } | undefined;
 
@@ -205,8 +208,11 @@ function App() {
       return;
     }
     try {
-      const result = await leo.connect?.('testnet');
-      const addr = result?.address || leo.publicKey;
+      // DecryptPermission.NoDecrypt = "NO_DECRYPT"
+      // WalletAdapterNetwork.TestnetBeta = "testnetbeta"
+      await leo.connect('NO_DECRYPT', 'testnetbeta');
+      // After connect(), publicKey is populated on the wallet object
+      const addr = leo.publicKey;
       if (addr) {
         setLeoAddress(addr);
         setShowWalletModal(false);
@@ -216,7 +222,7 @@ function App() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('Leo Wallet connect error:', err);
-      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancelled')) {
+      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancel')) {
         setWalletError('Connection cancelled.');
       } else {
         setWalletError('Could not connect to Aleo Wallet. Make sure the extension is unlocked.');
