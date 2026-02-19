@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletReadyState } from '@provablehq/aleo-wallet-standard';
 import { Network } from '@provablehq/aleo-types';
 import { CleanTelegramApp } from './components/CleanTelegramApp';
-import { MessageSquare, Lock, Zap, Shield, X, ArrowRight } from 'lucide-react';
+import { MessageSquare, Lock, Zap, Shield, X, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 import './App.css';
+
+const SHIELD_WALLET_NAME = 'Shield Wallet';
 
 // ─── Wallet Selection Modal ───────────────────────────────────────────────────
 
@@ -12,32 +15,46 @@ interface WalletModalProps {
   onConnectShield: () => void;
   onConnectLeo: () => void;
   connecting: boolean;
+  shieldInstalled: boolean;
+  leoInstalled: boolean;
+  error: string | null;
 }
 
-function WalletModal({ onClose, onConnectShield, onConnectLeo, connecting }: WalletModalProps) {
+function WalletModal({
+  onClose, onConnectShield, onConnectLeo,
+  connecting, shieldInstalled, leoInstalled, error
+}: WalletModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
       onClick={onClose}
     >
       <div
-        className="relative w-[360px] rounded-2xl p-6 shadow-2xl"
+        className="relative w-[380px] rounded-2xl p-6 shadow-2xl"
         style={{ background: '#131419', border: '1px solid rgba(255,255,255,0.08)' }}
         onClick={e => e.stopPropagation()}
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1 rounded-lg transition-colors"
+          className="absolute top-4 right-4 p-1.5 rounded-lg transition-colors hover:bg-white/5"
           style={{ color: '#64748b' }}
         >
           <X className="w-4 h-4" />
         </button>
 
         <h2 className="text-white font-semibold text-lg mb-1">Connect Wallet</h2>
-        <p className="text-sm mb-6" style={{ color: '#64748b' }}>
+        <p className="text-sm mb-5" style={{ color: '#64748b' }}>
           Choose your Aleo wallet to continue
         </p>
+
+        {error && (
+          <div className="flex items-start gap-2 p-3 rounded-xl mb-4 text-sm"
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5' }}>
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+            {error}
+          </div>
+        )}
 
         {/* Shield Wallet */}
         <button
@@ -45,8 +62,8 @@ function WalletModal({ onClose, onConnectShield, onConnectLeo, connecting }: Wal
           disabled={connecting}
           className="w-full flex items-center gap-4 p-4 rounded-xl mb-3 transition-all group disabled:opacity-60"
           style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.25)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.15)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(139,92,246,0.08)')}
+          onMouseEnter={e => { if (!connecting) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(139,92,246,0.15)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(139,92,246,0.08)'; }}
         >
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -56,10 +73,12 @@ function WalletModal({ onClose, onConnectShield, onConnectLeo, connecting }: Wal
           </div>
           <div className="flex-1 text-left">
             <div className="text-white font-medium text-sm">Shield Wallet</div>
-            <div className="text-xs" style={{ color: '#7c3aed' }}>by Provable · Recommended</div>
+            <div className="text-[11px]" style={{ color: shieldInstalled ? '#a78bfa' : '#64748b' }}>
+              {shieldInstalled ? 'by Provable · Ready to connect' : 'by Provable · Click to install'}
+            </div>
           </div>
           {connecting ? (
-            <div className="w-4 h-4 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#a78bfa' }} />
           ) : (
             <ArrowRight className="w-4 h-4 opacity-40 group-hover:opacity-100 transition-opacity" style={{ color: '#a78bfa' }} />
           )}
@@ -71,8 +90,8 @@ function WalletModal({ onClose, onConnectShield, onConnectLeo, connecting }: Wal
           disabled={connecting}
           className="w-full flex items-center gap-4 p-4 rounded-xl transition-all group disabled:opacity-60"
           style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(59,130,246,0.15)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(59,130,246,0.08)')}
+          onMouseEnter={e => { if (!connecting) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.15)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59,130,246,0.08)'; }}
         >
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -82,12 +101,14 @@ function WalletModal({ onClose, onConnectShield, onConnectLeo, connecting }: Wal
           </div>
           <div className="flex-1 text-left">
             <div className="text-white font-medium text-sm">Aleo Wallet</div>
-            <div className="text-xs" style={{ color: '#3b82f6' }}>by Leo · Chrome Extension</div>
+            <div className="text-[11px]" style={{ color: leoInstalled ? '#60a5fa' : '#64748b' }}>
+              {leoInstalled ? 'by Leo · Ready to connect' : 'by Leo · Click to install'}
+            </div>
           </div>
           <ArrowRight className="w-4 h-4 opacity-40 group-hover:opacity-100 transition-opacity" style={{ color: '#60a5fa' }} />
         </button>
 
-        <p className="text-center text-[11px] mt-5" style={{ color: '#374151' }}>
+        <p className="text-center text-[11px] mt-5" style={{ color: '#1f2937' }}>
           Connecting to Aleo Testnet
         </p>
       </div>
@@ -98,14 +119,26 @@ function WalletModal({ onClose, onConnectShield, onConnectLeo, connecting }: Wal
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 function App() {
-  const { connected, address, connect, connecting } = useWallet();
+  const { connected, address, connect, connecting, selectWallet, wallets } = useWallet();
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+
+  // Leo wallet: managed outside provable system since different adapter standard
+  const [leoAddress, setLeoAddress] = useState<string | null>(null);
 
   // Demo mode: ?demo=true
   const isDemo = new URLSearchParams(window.location.search).get('demo') === 'true';
-  const userAddress = address || 'aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59';
 
-  // Demo mode — go straight to app
+  // Effective address and connected state (Shield via provable OR Leo direct)
+  const effectiveAddress = address || leoAddress || 'aleo1h7yz0n5qx9uwyaxsprspkm5j6leey9eyzmjv9k7zyyd5nt5lguysystq59';
+  const isConnected = connected || !!leoAddress;
+
+  // Detect if wallets are installed
+  const shieldWalletEntry = wallets.find(w => w.adapter.name === SHIELD_WALLET_NAME);
+  const shieldInstalled = shieldWalletEntry?.readyState === WalletReadyState.INSTALLED;
+  const leoInstalled = !!(window as Record<string, unknown>).leoWallet;
+
+  // Demo mode
   if (isDemo) {
     return (
       <div className="flex flex-col h-screen">
@@ -123,42 +156,69 @@ function App() {
           </button>
         </div>
         <div className="flex-1 min-h-0">
-          <CleanTelegramApp userAddress={userAddress} />
+          <CleanTelegramApp userAddress={effectiveAddress} />
         </div>
       </div>
     );
   }
 
-  // Wallet connected — go straight to app
-  if (connected) {
-    return <CleanTelegramApp userAddress={userAddress} />;
+  // Wallet connected — go to app
+  if (isConnected) {
+    return <CleanTelegramApp userAddress={effectiveAddress} />;
   }
 
-  // Connect Shield Wallet
+  // ─── Connect handlers ────────────────────────────────────────────────────────
+
   const handleShieldConnect = async () => {
+    setWalletError(null);
+    if (!shieldInstalled) {
+      window.open('https://shield.provable.com', '_blank');
+      return;
+    }
     try {
+      // MUST select wallet before calling connect
+      selectWallet(SHIELD_WALLET_NAME as ReturnType<typeof selectWallet extends (name: infer N) => void ? (name: infer N) => N : never>);
       await connect(Network.TESTNET);
       setShowWalletModal(false);
-    } catch {
-      // Shield Wallet not installed — open install page
-      window.open('https://shield.provable.com', '_blank');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('Shield Wallet connect error:', err);
+      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancelled')) {
+        setWalletError('Connection cancelled.');
+      } else {
+        setWalletError('Could not connect to Shield Wallet. Make sure the extension is unlocked.');
+      }
     }
   };
 
-  // Connect Leo Wallet (Aleo Wallet extension by demox-labs)
   const handleLeoConnect = async () => {
-    const leo = (window as Record<string, unknown>).leoWallet as { connect?: (network: string) => Promise<unknown> } | undefined;
-    if (leo?.connect) {
-      try {
-        await leo.connect('testnet');
-        setShowWalletModal(false);
-        // Leo wallet may not trigger useWallet — reload to pick up address
-        window.location.reload();
-      } catch {
-        // user rejected
-      }
-    } else {
+    setWalletError(null);
+    const leo = (window as Record<string, unknown>).leoWallet as {
+      connect?: (network: string) => Promise<{ address?: string }>;
+      publicKey?: string;
+    } | undefined;
+
+    if (!leo) {
       window.open('https://www.leo.app', '_blank');
+      return;
+    }
+    try {
+      const result = await leo.connect?.('testnet');
+      const addr = result?.address || leo.publicKey;
+      if (addr) {
+        setLeoAddress(addr);
+        setShowWalletModal(false);
+      } else {
+        setWalletError('Connected but no address returned. Please try again.');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('Leo Wallet connect error:', err);
+      if (msg.toLowerCase().includes('user rejected') || msg.toLowerCase().includes('cancelled')) {
+        setWalletError('Connection cancelled.');
+      } else {
+        setWalletError('Could not connect to Aleo Wallet. Make sure the extension is unlocked.');
+      }
     }
   };
 
@@ -188,7 +248,7 @@ function App() {
             Try Demo
           </button>
           <button
-            onClick={() => setShowWalletModal(true)}
+            onClick={() => { setWalletError(null); setShowWalletModal(true); }}
             className="text-sm px-4 py-2 rounded-lg font-medium transition-all text-white"
             style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
           >
@@ -205,7 +265,7 @@ function App() {
           style={{ background: 'rgba(79,70,229,0.12)', border: '1px solid rgba(79,70,229,0.3)', color: '#818cf8' }}
         >
           <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          LIVE ON ALEO TESTNET · 6 CONTRACTS
+          LIVE ON ALEO TESTNET · 6 CONTRACTS DEPLOYED
         </div>
 
         {/* Headline */}
@@ -227,7 +287,7 @@ function App() {
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <button
-            onClick={() => setShowWalletModal(true)}
+            onClick={() => { setWalletError(null); setShowWalletModal(true); }}
             className="flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-base text-white transition-all hover:scale-105"
             style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 0 40px rgba(79,70,229,0.35)' }}
           >
@@ -261,7 +321,7 @@ function App() {
           ))}
         </div>
 
-        {/* App preview cards */}
+        {/* Feature cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-16 max-w-3xl w-full text-left">
           {[
             {
@@ -308,6 +368,9 @@ function App() {
           onConnectShield={handleShieldConnect}
           onConnectLeo={handleLeoConnect}
           connecting={connecting}
+          shieldInstalled={shieldInstalled}
+          leoInstalled={leoInstalled}
+          error={walletError}
         />
       )}
     </div>
