@@ -455,6 +455,10 @@ class MessagingOrchestrator {
     websocketService.sendTyping(chatId, isTyping);
   }
 
+  isRelayConnected(): boolean {
+    return websocketService.isConnected();
+  }
+
   // ─── ZK Tip Tracking ────────────────────────────────────────────────────────
 
   recordZkTip(transactionId: string, receiptId?: string): void {
