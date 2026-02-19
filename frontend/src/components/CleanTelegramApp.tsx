@@ -150,6 +150,8 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
   const [tipAmount, setTipAmount] = useState('0.1');
   const [tipSending, setTipSending] = useState(false);
   const [tipReceipt, setTipReceipt] = useState<{ txId: string; receiptId: string } | null>(null);
+  const [realReceiptId, setRealReceiptId] = useState<string | null>(null);
+  const [fetchingReceiptId, setFetchingReceiptId] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1393,7 +1395,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 flex items-center justify-center z-50"
             style={{ background: 'rgba(0,0,0,0.6)' }}
-            onClick={() => setTipReceipt(null)}
+            onClick={() => { setTipReceipt(null); setRealReceiptId(null); }}
           >
             <motion.div
               initial={{ scale: 0.92, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 16 }}
@@ -1426,14 +1428,33 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                     </a>
                   </div>
                 </div>
+
+                {/* Real BHP256 receipt_id fetched from on-chain TX */}
+                {realReceiptId && (
+                  <div>
+                    <div className="text-[11px] font-medium mb-1" style={{ color: t.textSecondary }}>BHP256 Receipt ID (on-chain)</div>
+                    <div className="p-2 rounded-lg" style={{ background: t.input }}>
+                      <span className="font-mono text-[10px] break-all" style={{ color: '#22c55e' }}>
+                        {realReceiptId}
+                      </span>
+                    </div>
+                    <a
+                      href={`https://api.explorer.provable.com/v1/testnet/program/private_tips.aleo/mapping/tip_receipts/${realReceiptId}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="text-[10px] mt-1 block"
+                      style={{ color: t.accent }}>
+                      Query tip_receipts mapping on-chain →
+                    </a>
+                  </div>
+                )}
               </div>
 
               <div className="text-[11px] p-2 rounded-lg mb-4" style={{ background: '#22c55e10', color: '#22c55e' }}>
                 The ZK circuit computed a BHP256 receipt_id and stored it in <span className="font-mono">tip_receipts</span> mapping.<br />
-                View TX on explorer → find the <span className="font-mono">tip_receipts</span> mapping key to query on-chain.
+                {!realReceiptId && 'Click below to fetch the real receipt ID from the confirmed TX.'}
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <a
                   href={getTransactionExplorerUrl(tipReceipt.txId)}
                   target="_blank" rel="noopener noreferrer"
@@ -1441,8 +1462,22 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
                   style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}>
                   View TX on Explorer →
                 </a>
-                <button onClick={() => setTipReceipt(null)}
-                  className="flex-1 py-2 rounded-lg text-[13px]"
+                {!realReceiptId && (
+                  <button
+                    onClick={async () => {
+                      setFetchingReceiptId(true);
+                      const id = await leoContractService.fetchRealReceiptId(tipReceipt.txId);
+                      setRealReceiptId(id ?? 'Not yet finalized — try again in ~30s');
+                      setFetchingReceiptId(false);
+                    }}
+                    disabled={fetchingReceiptId}
+                    className="flex-1 py-2 rounded-lg text-[13px] font-medium"
+                    style={{ background: t.input, color: t.accent }}>
+                    {fetchingReceiptId ? 'Fetching…' : 'Fetch receipt ID'}
+                  </button>
+                )}
+                <button onClick={() => { setTipReceipt(null); setRealReceiptId(null); }}
+                  className="w-full py-2 rounded-lg text-[13px]"
                   style={{ background: t.input, color: t.textSecondary }}>
                   Close
                 </button>

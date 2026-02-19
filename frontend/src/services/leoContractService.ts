@@ -338,15 +338,55 @@ export class LeoContractService {
   }
 
   /**
+   * Fetch the real BHP256 receipt_id from a confirmed private_tips.aleo TX.
+   *
+   * The receipt_id is a PUBLIC finalize input — it's on-chain and queryable.
+   * Leo contract computes:
+   *   r_hash = BHP256::commit_to_field(recipient, 0scalar)
+   *   a_hash = BHP256::hash_to_field(amount)
+   *   s_hash = BHP256::hash_to_field(salt)
+   *   receipt_id = BHP256::hash_to_field({ r_hash, a_hash, s_hash })
+   *
+   * API: GET /v1/testnet/transaction/{txId}
+   * The finalize inputs for send_private_tip are [receipt_id, group_id].
+   * receipt_id can then be queried: GET /v1/testnet/program/private_tips.aleo/mapping/tip_receipts/{receipt_id}
+   */
+  async fetchRealReceiptId(txId: string): Promise<string | null> {
+    try {
+      const res = await fetch(`${ALEO_API}/transaction/${txId}`);
+      if (!res.ok) return null;
+      const tx = await res.json();
+
+      // Navigate to execution transitions
+      const transitions: unknown[] = tx?.transaction?.execution?.transitions ?? [];
+      for (const t of transitions) {
+        const tr = t as Record<string, unknown>;
+        if (tr.program === PROGRAM_IDS.PRIVATE_TIPS && tr.function === 'send_private_tip') {
+          const finalizeArr = tr.finalize as unknown[] | undefined;
+          if (!Array.isArray(finalizeArr) || finalizeArr.length === 0) continue;
+          // finalize[0] is receipt_id — can be a string or { value: string }
+          const first = finalizeArr[0];
+          if (typeof first === 'string') return first;
+          if (first && typeof first === 'object') {
+            const v = (first as Record<string, unknown>).value;
+            if (typeof v === 'string') return v;
+          }
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Verify a tip receipt on-chain
    * Reads: private_tips.aleo/tip_receipts  (TX at1cr03j... on testnet)
-   * Returns the tip amount if the receipt exists, null otherwise
+   * Returns true if the receipt exists (stored as bool in v2, or amount in v1)
    */
-  async verifyTipReceipt(receiptId: string): Promise<number | null> {
+  async verifyTipReceipt(receiptId: string): Promise<boolean> {
     const value = await fetchMapping(PROGRAM_IDS.PRIVATE_TIPS, 'tip_receipts', receiptId);
-    if (!value || value === 'null') return null;
-    const num = parseInt(value.replace(/[^0-9]/g, ''), 10);
-    return isNaN(num) ? null : num;
+    return value !== null && value !== 'null' && value !== '';
   }
 
   /**
