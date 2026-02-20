@@ -25,9 +25,10 @@ function calculateScore(metrics: PrivacyMetrics): number {
   // E2E Encryption — 30%: all messages encrypted client-side (AES-256-GCM)
   const encRate = total > 0 ? metrics.encryptedMessages / total : 0;
 
-  // Relay Privacy — 15%: messages sent through relay (server sees only ciphertext)
-  // Relay delivery IS real privacy — counts even without blockchain TX
-  const relayRate = total > 0 ? Math.min(1, metrics.relayedMessages / total) : 0;
+  // Relay Privacy — 15%: encrypted messages are relay-private by design.
+  // The relay ALWAYS sees only ciphertext — privacy holds whether or not
+  // the socket was live at send time. Use encRate as the relay privacy rate.
+  const relayRate = encRate;
 
   // Blockchain Anchoring — 10%: messages with on-chain TX (message_handler.aleo / group_membership.aleo)
   const chainRate = total > 0 ? metrics.onChainMessages / total : 0;
@@ -141,9 +142,8 @@ export function PrivacyScoreDashboard({ theme, onClose, isOpen = true }: Privacy
   const encRate = metrics && metrics.totalMessages > 0
     ? Math.round((metrics.encryptedMessages / metrics.totalMessages) * 100)
     : 0;
-  const relayRate = metrics && metrics.totalMessages > 0
-    ? Math.round(Math.min(1, metrics.relayedMessages / metrics.totalMessages) * 100)
-    : 0;
+  // Relay privacy = encryption rate: encrypted msgs are relay-private by design
+  const relayRate = encRate;
   const chainRate = metrics && metrics.totalMessages > 0
     ? Math.round((metrics.onChainMessages / metrics.totalMessages) * 100)
     : 0;
