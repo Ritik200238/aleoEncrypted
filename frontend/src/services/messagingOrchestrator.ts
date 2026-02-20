@@ -72,6 +72,7 @@ export interface PrivacyMetrics {
   totalMessages: number;
   encryptedMessages: number;
   onChainMessages: number;
+  relayedMessages: number;   // messages sent through relay (server never sees plaintext)
   totalGroups: number;
   confirmedTxCount: number;
   zkTipCount: number;
@@ -130,20 +131,43 @@ function adaptDbContact(db: DbContact): OrchestratorContact {
 
 // ─── Orchestrator ────────────────────────────────────────────────────────────
 
+const LS_ZK_TIPS = 'es_zk_tip_txs';
+const LS_ANON_TXS = 'es_anon_msg_txs';
+const LS_RELAYED  = 'es_relayed_count';
+
 class MessagingOrchestrator {
   private userAddress: string = '';
   private messageListeners: Array<(msg: OrchestratorMessage) => void> = [];
   private statusListeners: Array<(msgId: string, status: OrchestratorMessage['status'], txId?: string) => void> = [];
   private typingListeners: Array<(chatId: string, userId: string, isTyping: boolean) => void> = [];
   private nullifierListeners: Array<(data: { msgId: string; nullifier: string; txId: string }) => void> = [];
+  // Persisted to localStorage so scores survive page reload
   private zkTipTxs: Array<{ id: string; url: string; timestamp: number; receiptId?: string }> = [];
   private anonymousMsgTxs: Array<{ id: string; url: string; nullifier: string; timestamp: number }> = [];
+  private relayedCount: number = 0; // messages confirmed delivered via relay
+
+  private loadPersisted(): void {
+    try {
+      this.zkTipTxs = JSON.parse(localStorage.getItem(LS_ZK_TIPS) || '[]');
+      this.anonymousMsgTxs = JSON.parse(localStorage.getItem(LS_ANON_TXS) || '[]');
+      this.relayedCount = parseInt(localStorage.getItem(LS_RELAYED) || '0', 10);
+    } catch { /* ignore parse errors */ }
+  }
+
+  private savePersisted(): void {
+    try {
+      localStorage.setItem(LS_ZK_TIPS, JSON.stringify(this.zkTipTxs));
+      localStorage.setItem(LS_ANON_TXS, JSON.stringify(this.anonymousMsgTxs));
+      localStorage.setItem(LS_RELAYED, String(this.relayedCount));
+    } catch { /* ignore quota errors */ }
+  }
 
   /**
    * Initialize with user's wallet address. Call once after wallet connects.
    */
   async initialize(userAddress: string): Promise<void> {
     this.userAddress = userAddress;
+    this.loadPersisted();
 
     // Connect to relay server (graceful - no crash if server offline)
     websocketService.connect(userAddress).catch(() => {
@@ -306,13 +330,14 @@ class MessagingOrchestrator {
       });
       this.notifyStatus(msgId, 'delivered', result.transactionId);
 
-      // Track anonymous message TX for Privacy Score Dashboard
+      // Track anonymous message TX for Privacy Score Dashboard (persisted)
       this.anonymousMsgTxs.push({
         id: result.transactionId,
         url: getTransactionExplorerUrl(result.transactionId),
         nullifier: result.nullifier,
         timestamp: Date.now(),
       });
+      this.savePersisted();
 
       // Fire listeners with nullifier so UI can display it
       const nullifierMsg = { msgId, nullifier: result.nullifier, txId: result.transactionId };
@@ -348,6 +373,9 @@ class MessagingOrchestrator {
       isAnonymous,
       timestamp,
     });
+    // Count relay deliveries for privacy score (relay sees only ciphertext — real privacy)
+    this.relayedCount++;
+    this.savePersisted();
   }
 
   // ─── Group Creation ─────────────────────────────────────────────────────────
@@ -468,6 +496,7 @@ class MessagingOrchestrator {
       timestamp: Date.now(),
       receiptId,
     });
+    this.savePersisted();
   }
 
   // ─── Privacy Metrics ─────────────────────────────────────────────────────────
@@ -513,6 +542,7 @@ class MessagingOrchestrator {
       totalMessages: allMsgs.length,
       encryptedMessages: encryptedMsgs.length,
       onChainMessages: onChainMsgs.length + this.anonymousMsgTxs.length,
+      relayedMessages: this.relayedCount,
       totalGroups: groups.length,
       confirmedTxCount: onChainMsgs.length + this.zkTipTxs.length + this.anonymousMsgTxs.length,
       zkTipCount: this.zkTipTxs.length,

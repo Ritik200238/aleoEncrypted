@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Shield, Lock, Zap, Link, RefreshCw, ExternalLink, CheckCircle, Clock, Key } from 'lucide-react';
+import { Shield, Lock, Zap, Link, RefreshCw, ExternalLink, CheckCircle, Key, Radio } from 'lucide-react';
 import { messagingOrchestrator, type PrivacyMetrics } from '../services/messagingOrchestrator';
 
 interface PrivacyScoreDashboardProps {
@@ -20,20 +20,29 @@ interface PrivacyScoreDashboardProps {
 function calculateScore(metrics: PrivacyMetrics): number {
   if (metrics.totalMessages === 0 && metrics.zkTipCount === 0 && (metrics.anonymousMessages ?? 0) === 0) return 0;
 
-  const encRate = metrics.totalMessages > 0
-    ? metrics.encryptedMessages / metrics.totalMessages
-    : 0;
-  const chainRate = metrics.totalMessages > 0
-    ? metrics.onChainMessages / metrics.totalMessages
-    : 0;
+  const total = metrics.totalMessages;
+
+  // E2E Encryption — 30%: all messages encrypted client-side (AES-256-GCM)
+  const encRate = total > 0 ? metrics.encryptedMessages / total : 0;
+
+  // Relay Privacy — 15%: messages sent through relay (server sees only ciphertext)
+  // Relay delivery IS real privacy — counts even without blockchain TX
+  const relayRate = total > 0 ? Math.min(1, metrics.relayedMessages / total) : 0;
+
+  // Blockchain Anchoring — 10%: messages with on-chain TX (message_handler.aleo / group_membership.aleo)
+  const chainRate = total > 0 ? metrics.onChainMessages / total : 0;
+
+  // Groups on Aleo — 20%: ZK group created (group_manager.aleo)
   const hasGroups = metrics.totalGroups > 0 ? 1 : 0;
-  // ZK tips are real Aleo ZK-SNARK usage — bonus up to 10 points
+
+  // ZK Tips — 10%: private_tips.aleo ZK-SNARK usage (3 tips = full score)
   const zkTipBonus = Math.min(1, metrics.zkTipCount / 3);
-  // Anonymous messages with Merkle ZK proofs — bonus up to 5 points
+
+  // Anonymous ZK messages — 5%: Merkle proofs (group_membership.aleo / submit_feedback)
   const anonBonus = Math.min(1, (metrics.anonymousMessages ?? 0) / 2);
 
-  // Weighted score: encryption (30%), on-chain (25%), groups (20%), ZK tips (10%), anon msgs (5%)
-  const score = encRate * 30 + chainRate * 25 + hasGroups * 20 + zkTipBonus * 10 + anonBonus * 5 + 10; // +10 base for having any activity
+  // +10 base for having any activity
+  const score = encRate * 30 + relayRate * 15 + chainRate * 10 + hasGroups * 20 + zkTipBonus * 10 + anonBonus * 5 + 10;
   return Math.min(100, Math.round(score));
 }
 
@@ -132,6 +141,9 @@ export function PrivacyScoreDashboard({ theme, onClose, isOpen = true }: Privacy
   const encRate = metrics && metrics.totalMessages > 0
     ? Math.round((metrics.encryptedMessages / metrics.totalMessages) * 100)
     : 0;
+  const relayRate = metrics && metrics.totalMessages > 0
+    ? Math.round(Math.min(1, metrics.relayedMessages / metrics.totalMessages) * 100)
+    : 0;
   const chainRate = metrics && metrics.totalMessages > 0
     ? Math.round((metrics.onChainMessages / metrics.totalMessages) * 100)
     : 0;
@@ -193,7 +205,8 @@ export function PrivacyScoreDashboard({ theme, onClose, isOpen = true }: Privacy
           </div>
           {[
             { label: 'E2E Encryption (AES-256-GCM)', value: encRate, weight: 30, color: '#6366f1' },
-            { label: 'On-Chain Records', value: chainRate, weight: 25, color: '#22c55e' },
+            { label: 'Relay Privacy (ciphertext-only relay)', value: relayRate, weight: 15, color: '#3b82f6' },
+            { label: 'Blockchain Anchoring (on-chain TX)', value: chainRate, weight: 10, color: '#22c55e' },
             { label: 'Groups on Aleo', value: metrics ? (metrics.totalGroups > 0 ? 100 : 0) : 0, weight: 20, color: '#f59e0b' },
             { label: 'ZK Tips (private_tips.aleo)', value: metrics ? Math.min(100, (metrics.zkTipCount / 3) * 100) : 0, weight: 10, color: '#06b6d4' },
             { label: 'Anon Msgs (Merkle ZK)', value: metrics ? Math.min(100, ((metrics.anonymousMessages ?? 0) / 2) * 100) : 0, weight: 5, color: '#a855f7' },
@@ -223,6 +236,14 @@ export function PrivacyScoreDashboard({ theme, onClose, isOpen = true }: Privacy
             value={`${metrics?.encryptedMessages ?? 0}`}
             subValue={`of ${metrics?.totalMessages ?? 0} messages`}
             color="#6366f1"
+            theme={theme}
+          />
+          <MetricCard
+            icon={<Radio size={14} />}
+            label="Relayed"
+            value={`${metrics?.relayedMessages ?? 0}`}
+            subValue="via encrypted relay"
+            color="#3b82f6"
             theme={theme}
           />
           <MetricCard

@@ -287,6 +287,16 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChat?.id]);
 
+  // ─── Sync wallet to leoContractService whenever wallet state changes ─────
+  useEffect(() => {
+    if (walletCtx.connected && walletCtx.address) {
+      leoContractService.setWallet(walletCtx);
+      setBlockchainStatus('connected');
+    } else {
+      setBlockchainStatus('offline');
+    }
+  }, [walletCtx.connected, walletCtx.address, walletCtx]);
+
   // ─── Persist theme ────────────────────────────────────
   useEffect(() => { localStorage.setItem('aleogram_theme', theme); }, [theme]);
 
