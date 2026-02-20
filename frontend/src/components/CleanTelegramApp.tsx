@@ -20,6 +20,7 @@ import type { Contact } from '../models/Contact';
 import { messagingOrchestrator, type OrchestratorMessage, type OrchestratorChat } from '../services/messagingOrchestrator';
 import { contactService } from '../services/contactService';
 import { leoContractService } from '../services/leoContractService';
+import { webrtcService, type CallInfo } from '../services/webrtcService';
 import { TransactionToast, type Transaction as TxType } from './TransactionStatus';
 import { ZKVerifiedIndicator } from './ZKProofBadge';
 import { AnonymousMessageToggle } from './AnonymousMessageToggle';
@@ -156,6 +157,9 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const [rtcCall, setRtcCall] = useState<CallInfo | null>(null);
 
   const t = themes[theme];
 
@@ -166,6 +170,25 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
       try {
         // Initialize orchestrator
         await messagingOrchestrator.initialize(userAddress);
+
+        // Connect WebRTC service for real calls
+        webrtcService.connect(userAddress);
+        webrtcService.onCallUpdate((info) => {
+          setRtcCall(info.state === 'ended' || info.state === 'idle' ? null : info);
+          // Attach streams to video elements when they arrive
+          if (info.localStream && localVideoRef.current) {
+            localVideoRef.current.srcObject = info.localStream;
+          }
+          if (info.remoteStream && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = info.remoteStream;
+          }
+          // Update activeCall UI state to match WebRTC state
+          if (info.state === 'connected') {
+            setActiveCall(prev => prev ? { ...prev, status: 'connected' } : null);
+          } else if (info.state === 'idle') {
+            setActiveCall(null);
+          }
+        });
 
         // Wire wallet to leoContractService (Shield Wallet)
         if (walletCtx.connected && walletCtx.address) {
@@ -248,7 +271,7 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
     }
     init();
 
-    return () => { messagingOrchestrator.disconnect(); };
+    return () => { messagingOrchestrator.disconnect(); webrtcService.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userAddress, address]);
 
@@ -332,19 +355,23 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
     }
   }, [messageInput, selectedChat, anonymousMode]);
 
-  // ─── Start call (UI demo — WebRTC peer connection not yet implemented) ──────
+  // ─── Start call (real WebRTC peer-to-peer encrypted call) ─────────────────
   const startCall = useCallback((chat: OrchestratorChat, type: CallType) => {
+    const peerAddress = chat.participants?.find(p => p !== userAddress) || (chat as any).address || '';
     setActiveCall({
       chatId: chat.id, name: chat.name, avatar: chat.avatar,
       type, status: 'ringing', startTime: Date.now(),
       isMuted: false, isSpeaker: false, isVideoOn: type === 'video',
     });
-    // No auto-connect: call stays in 'ringing' state until manually answered or ended
-  }, []);
+    if (peerAddress) {
+      webrtcService.startCall(peerAddress, type === 'video' ? 'video' : 'audio');
+    }
+  }, [userAddress]);
 
   // ─── End call ─────────────────────────────────────────
   const endCall = useCallback(() => {
     if (!activeCall) return;
+    webrtcService.hangUp();
     const record: CallRecord = {
       id: generateId(), name: activeCall.name, avatar: activeCall.avatar,
       type: activeCall.type, direction: 'outgoing',
@@ -473,12 +500,11 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
       >
         {activeCall.type === 'video' && activeCall.status === 'connected' && (
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute inset-0" style={{
-              background: 'radial-gradient(circle at 30% 40%, rgba(51,144,236,0.15) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(135,116,225,0.1) 0%, transparent 50%)',
-            }} />
-            <div className="absolute bottom-28 right-6 w-32 h-44 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20"
-              style={{ background: 'linear-gradient(135deg, #2b5278, #182533)' }}>
-              <div className="flex items-center justify-center h-full text-4xl">🧑</div>
+            {/* Remote video — full screen */}
+            <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover" />
+            {/* Local video — picture-in-picture */}
+            <div className="absolute bottom-28 right-6 w-32 h-44 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/20">
+              <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
             </div>
           </div>
         )}
@@ -533,12 +559,6 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
             </div>
           )}
           <div className="flex items-center justify-center gap-8">
-            {activeCall.status === 'ringing' && (
-              <button onClick={() => setActiveCall(prev => prev ? { ...prev, status: 'connected', startTime: Date.now() } : null)}
-                className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style={{ background: '#4fae4e' }}>
-                <Phone className="w-7 h-7 text-white" />
-              </button>
-            )}
             <button onClick={endCall} className="w-16 h-16 rounded-full flex items-center justify-center shadow-lg" style={{ background: '#ff3b30' }}>
               <PhoneOff className="w-7 h-7 text-white" />
             </button>
@@ -1386,6 +1406,68 @@ export function CleanTelegramApp({ userAddress }: CleanTelegramAppProps) {
       {/* ─── Call Screen ─── */}
       <AnimatePresence>
         {activeCall && renderCallScreen()}
+      </AnimatePresence>
+
+      {/* ─── Incoming Call Overlay ─── */}
+      <AnimatePresence>
+        {rtcCall?.state === 'incoming' && !activeCall && (
+          <motion.div
+            initial={{ opacity: 0, y: 60 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 60 }}
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[110] rounded-2xl shadow-2xl overflow-hidden"
+            style={{ background: t.sidebar, border: `1px solid ${t.border}`, width: 320 }}>
+            <div className="flex flex-col items-center p-5 gap-3">
+              <div className="flex items-center gap-2 mb-1">
+                <PhoneIncoming className="w-4 h-4" style={{ color: '#4fae4e' }} />
+                <motion.span animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }}
+                  className="text-[12px] font-medium" style={{ color: '#4fae4e' }}>
+                  Incoming {rtcCall.callType} call
+                </motion.span>
+              </div>
+              <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
+                style={{ background: t.avatarGradient }}>👤</div>
+              <div className="text-center">
+                <div className="text-[15px] font-semibold" style={{ color: t.text }}>
+                  {truncAddr(rtcCall.peerAddress, 8)}
+                </div>
+                <div className="text-[12px]" style={{ color: t.textSecondary }}>
+                  {rtcCall.callType === 'video' ? 'Video call' : 'Voice call'}
+                </div>
+              </div>
+              <div className="flex gap-8 mt-1">
+                <div className="flex flex-col items-center gap-1">
+                  <button
+                    onClick={() => webrtcService.rejectCall()}
+                    className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
+                    style={{ background: '#ff3b30' }}>
+                    <PhoneOff className="w-6 h-6 text-white" />
+                  </button>
+                  <span className="text-[10px]" style={{ color: t.textSecondary }}>Decline</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <button
+                    onClick={async () => {
+                      await webrtcService.acceptCall();
+                      setActiveCall({
+                        chatId: rtcCall.callId,
+                        name: truncAddr(rtcCall.peerAddress, 8),
+                        avatar: '👤',
+                        type: rtcCall.callType === 'video' ? 'video' : 'voice',
+                        status: 'connected',
+                        startTime: Date.now(),
+                        isMuted: false, isSpeaker: false,
+                        isVideoOn: rtcCall.callType === 'video',
+                      });
+                    }}
+                    className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
+                    style={{ background: '#4fae4e' }}>
+                    <Phone className="w-6 h-6 text-white" />
+                  </button>
+                  <span className="text-[10px]" style={{ color: t.textSecondary }}>Accept</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* ─── ZK Tip Receipt Confirmation Modal ─── */}

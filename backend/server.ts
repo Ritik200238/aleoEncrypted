@@ -251,6 +251,84 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ─── WebRTC Signaling ────────────────────────────────────────────────────────
+  // The server only relays SDP offers/answers and ICE candidates.
+  // All media is peer-to-peer — server never touches audio/video.
+
+  socket.on('call_invite', (data: { recipientAddress: unknown; callId: unknown; callType: unknown }) => {
+    if (isRateLimited(socket.id)) { socket.disconnect(true); return; }
+    const recipientSocketId = userSockets.get(data.recipientAddress as string);
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('call_invite', {
+        callId: data.callId,
+        callType: data.callType, // 'audio' | 'video'
+        callerAddress: connectedUsers.get(socket.id),
+      });
+    }
+  });
+
+  socket.on('call_accept', (data: { callerAddress: unknown; callId: unknown }) => {
+    if (isRateLimited(socket.id)) { socket.disconnect(true); return; }
+    const callerSocketId = userSockets.get(data.callerAddress as string);
+    if (callerSocketId) {
+      io.to(callerSocketId).emit('call_accept', {
+        callId: data.callId,
+        acceptorAddress: connectedUsers.get(socket.id),
+      });
+    }
+  });
+
+  socket.on('call_reject', (data: { callerAddress: unknown; callId: unknown }) => {
+    if (isRateLimited(socket.id)) { socket.disconnect(true); return; }
+    const callerSocketId = userSockets.get(data.callerAddress as string);
+    if (callerSocketId) {
+      io.to(callerSocketId).emit('call_reject', { callId: data.callId });
+    }
+  });
+
+  socket.on('call_end', (data: { peerAddress: unknown; callId: unknown }) => {
+    if (isRateLimited(socket.id)) { socket.disconnect(true); return; }
+    const peerSocketId = userSockets.get(data.peerAddress as string);
+    if (peerSocketId) {
+      io.to(peerSocketId).emit('call_end', { callId: data.callId });
+    }
+  });
+
+  socket.on('webrtc_offer', (data: { peerAddress: unknown; callId: unknown; sdp: unknown }) => {
+    if (isRateLimited(socket.id)) { socket.disconnect(true); return; }
+    const peerSocketId = userSockets.get(data.peerAddress as string);
+    if (peerSocketId) {
+      io.to(peerSocketId).emit('webrtc_offer', {
+        callId: data.callId,
+        sdp: data.sdp,
+        fromAddress: connectedUsers.get(socket.id),
+      });
+    }
+  });
+
+  socket.on('webrtc_answer', (data: { peerAddress: unknown; callId: unknown; sdp: unknown }) => {
+    if (isRateLimited(socket.id)) { socket.disconnect(true); return; }
+    const peerSocketId = userSockets.get(data.peerAddress as string);
+    if (peerSocketId) {
+      io.to(peerSocketId).emit('webrtc_answer', {
+        callId: data.callId,
+        sdp: data.sdp,
+        fromAddress: connectedUsers.get(socket.id),
+      });
+    }
+  });
+
+  socket.on('webrtc_ice', (data: { peerAddress: unknown; callId: unknown; candidate: unknown }) => {
+    if (isRateLimited(socket.id)) { socket.disconnect(true); return; }
+    const peerSocketId = userSockets.get(data.peerAddress as string);
+    if (peerSocketId) {
+      io.to(peerSocketId).emit('webrtc_ice', {
+        callId: data.callId,
+        candidate: data.candidate,
+      });
+    }
+  });
+
   // Heartbeat
   socket.on('heartbeat', () => {
     socket.emit('heartbeat_ack', { timestamp: Date.now() });

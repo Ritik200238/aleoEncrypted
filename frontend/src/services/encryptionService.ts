@@ -106,18 +106,15 @@ export class EncryptionService {
    * Derive a group encryption key from group ID and creator address
    * Uses PBKDF2 for proper key derivation
    */
-  async deriveGroupKey(groupId: string, creatorAddress: string): Promise<string> {
+  async deriveGroupKey(groupId: string, _creatorAddress?: string): Promise<string> {
     try {
-      // Combine inputs
-      const keyMaterial = `${groupId}:${creatorAddress}`;
-
-      // Generate salt from group ID (deterministic for same group)
+      // Key derived from groupId ONLY — both sender and recipient must get the same key.
+      // For direct chats: chatId = "direct_{sorted(addrA, addrB)}" — shared by both parties.
+      // For group chats: chatId = "group_{timestamp}_{random}" — shared via WebSocket join.
+      // Including userAddress in key derivation would make Alice and Bob derive different
+      // keys, so Bob could never decrypt Alice's messages. Fixed here.
       const salt = await this.hashToBytes(groupId);
-
-      // Derive key using PBKDF2
-      const keyBytes = await this.pbkdf2(keyMaterial, salt);
-
-      // Return as base64 string
+      const keyBytes = await this.pbkdf2(groupId, salt);
       return this.arrayBufferToBase64(keyBytes);
     } catch (error) {
       console.error('Key derivation failed:', error);
